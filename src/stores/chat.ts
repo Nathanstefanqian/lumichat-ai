@@ -2,11 +2,14 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type ChatRole = 'user' | 'assistant';
+export type MessageStatus = 'sending' | 'streaming' | 'synced' | 'failed';
 
 export interface ChatMessage {
   id: string;
+  serverId?: string;  // 服务器返回的真实 ID
   role: ChatRole;
   content: string;
+  status: MessageStatus;  // 消息状态
   createdAt: number;
 }
 
@@ -30,7 +33,10 @@ interface ChatState {
   addMessage: (conversationId: string, message: ChatMessage) => void;
   appendMessage: (conversationId: string, messageId: string, chunk: string) => void;
   setMessageContent: (conversationId: string, messageId: string, content: string) => void;
+  setMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
+  updateMessageServerId: (conversationId: string, localId: string, serverId: string) => void;
   setConversationTitle: (conversationId: string, title: string) => void;
+  clearMessages: (conversationId: string) => void;
 }
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -154,6 +160,36 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
       },
+      setMessageStatus: (conversationId, messageId, status) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.id === conversationId
+              ? {
+                  ...conv,
+                  messages: conv.messages.map((msg) =>
+                    msg.id === messageId ? { ...msg, status } : msg,
+                  ),
+                }
+              : conv,
+          ),
+        }));
+      },
+      updateMessageServerId: (conversationId, localId, serverId) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.id === conversationId
+              ? {
+                  ...conv,
+                  messages: conv.messages.map((msg) =>
+                    msg.id === localId 
+                      ? { ...msg, serverId, status: 'synced' as MessageStatus } 
+                      : msg,
+                  ),
+                }
+              : conv,
+          ),
+        }));
+      },
       setConversationTitle: (conversationId, title) => {
         set((state) => ({
           conversations: state.conversations.map((conv) =>
@@ -161,9 +197,17 @@ export const useChatStore = create<ChatState>()(
           ),
         }));
       },
+      clearMessages: (conversationId) => {
+        set((state) => ({
+          conversations: state.conversations.map((conv) =>
+            conv.id === conversationId ? { ...conv, messages: [] } : conv,
+          ),
+        }));
+      },
     }),
     {
-      name: 'chat-storage',
+      name: 'chat-storage-v2', // Increment version to clear old cache
+      version: 1,
     },
   ),
 );

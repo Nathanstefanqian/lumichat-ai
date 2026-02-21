@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Send, User, Users } from 'lucide-react';
+import { Send, User, Users, ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useSocketStore } from '@/stores/socket';
@@ -293,7 +293,10 @@ export function UserChatView() {
       <div className="w-full h-full flex flex-col">
         <div className="bg-card text-card-foreground rounded-3xl shadow-sm border border-border flex-1 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-            <div className="md:w-72 border-b md:border-b-0 md:border-r border-border p-4 space-y-4">
+            <div className={cn(
+              "md:w-72 border-b md:border-b-0 md:border-r border-border p-4 space-y-4 flex flex-col min-h-0 overflow-y-auto",
+              activeConversation ? "hidden md:flex" : "flex"
+            )}>
               <div>
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Users className="w-4 h-4" />
@@ -438,10 +441,26 @@ export function UserChatView() {
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col">
+            <div className={cn(
+              "flex-1 min-h-0 flex flex-col",
+              !activeConversation ? "hidden md:flex" : "flex"
+            )}>
+              {/* Mobile Header */}
+              <div className="md:hidden flex items-center p-3 border-b border-border">
+                <button 
+                  onClick={() => setActiveConversation(null)}
+                  className="mr-2 p-1 -ml-1 hover:bg-muted rounded-full"
+                >
+                  <ChevronLeft className="w-5 h-5 text-foreground" />
+                </button>
+                <span className="font-semibold truncate text-foreground">
+                  {activeConversation?.title || '对话'}
+                </span>
+              </div>
+
               <div
                 ref={listRef}
-                className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 scrollbar-hidden"
+                className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4 scrollbar-hidden"
               >
                 {messages.length === 0 ? (
                   <div className="text-center text-muted-foreground py-16 space-y-4">

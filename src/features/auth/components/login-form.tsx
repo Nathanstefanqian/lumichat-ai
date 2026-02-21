@@ -21,6 +21,7 @@ export function LoginForm() {
     register,
     handleSubmit,
     formState: { errors },
+    setValue,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
@@ -29,8 +30,29 @@ export function LoginForm() {
     login(data);
   };
 
+  const handleQuickFill = (email: string) => {
+    setValue('email', email);
+    setValue('password', 'Password123');
+  };
+
   return (
     <div className="grid gap-6">
+      <div className="flex justify-center gap-4 text-xs">
+        <button
+          type="button"
+          onClick={() => handleQuickFill('test@test.com')}
+          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
+        >
+          测试账号 1
+        </button>
+        <button
+          type="button"
+          onClick={() => handleQuickFill('demo@example.com')}
+          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
+        >
+          测试账号 2
+        </button>
+      </div>
       <form onSubmit={handleSubmit(onSubmit)}>
         <div className="grid gap-4">
           <div className="grid gap-2">

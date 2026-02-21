@@ -7,12 +7,13 @@ import {
   LogOut,
   Sparkles,
   Users,
+  Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useNavigate } from 'react-router-dom';
 
-export type TabType = 'chat' | 'image' | 'voice' | 'user';
+export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
     { id: 'user', icon: Users, label: '用户对话', color: 'text-indigo-500' },
     { id: 'image', icon: ImageIcon, label: 'AI 图片/视频', color: 'text-purple-500' },
     { id: 'voice', icon: Mic, label: 'AI 语音', color: 'text-green-500' },
+    { id: 'settings', icon: Settings, label: '设置', color: 'text-gray-500' },
   ] as const;
 
   return (

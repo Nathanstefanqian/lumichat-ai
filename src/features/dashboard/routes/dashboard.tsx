@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import type { TabType } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/stores/auth';
-import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings } from 'lucide-react';
 import { ChatView } from '@/features/ai/components/chat-view';
 import { UserChatView } from '@/features/chat/components/user-chat-view';
+import { SettingsView } from '@/features/settings/components/settings-view';
 import { useThemeStore } from '@/stores/theme';
 import { useSocketStore } from '@/stores/socket';
 
@@ -55,6 +56,8 @@ export function Dashboard() {
     switch (activeTab) {
       case 'chat':
         return <ChatView />;
+      case 'settings':
+        return <SettingsView />;
       case 'image':
         return (
           <div className="flex-1 p-8 theme-muted h-screen overflow-y-auto">
@@ -122,20 +125,23 @@ export function Dashboard() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background font-sans theme-page">
-      <Sidebar 
-        isOpen={isSidebarOpen} 
-        toggleSidebar={toggleSidebar} 
-        activeTab={activeTab} 
-        onTabChange={setActiveTab} 
-      />
+      <div className="hidden md:block">
+        <Sidebar 
+          isOpen={isSidebarOpen} 
+          toggleSidebar={toggleSidebar} 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+        />
+      </div>
       
-      <main className="flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300">
-        <header className="h-16 theme-surface border-b flex items-center justify-between px-8 shadow-sm z-10">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden transition-all duration-300 relative">
+        <header className="hidden md:flex h-16 theme-surface border-b items-center justify-between px-8 shadow-sm z-10">
           <h1 className="text-lg font-semibold theme-text">
             {activeTab === 'chat' && '对话'}
             {activeTab === 'user' && '用户对话'}
             {activeTab === 'image' && '绘图'}
             {activeTab === 'voice' && '语音'}
+            {activeTab === 'settings' && '设置'}
           </h1>
           <div className="flex items-center space-x-4">
             <div className="hidden lg:flex items-center gap-3 rounded-full border theme-border bg-background/70 px-3 py-1 text-xs text-muted-foreground">
@@ -181,6 +187,33 @@ export function Dashboard() {
         </header>
 
         {renderContent()}
+
+        <div className="md:hidden border-t theme-border theme-surface pb-safe">
+          <div className="flex justify-around items-center h-16">
+            {[
+              { id: 'chat', label: '对话', icon: Sparkles },
+              { id: 'user', label: '用户', icon: Users },
+              { id: 'image', label: '绘图', icon: ImageIcon },
+              { id: 'voice', label: '语音', icon: Mic },
+              { id: 'settings', label: '设置', icon: Settings },
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id as TabType)}
+                  className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${
+                    isActive ? 'theme-text' : 'theme-subtle'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-[10px]">{item.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </main>
     </div>
   );

@@ -1,21 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Send, Bot, User, Plus, MessageCircle } from 'lucide-react';
+import { Sparkles, Send, Bot, User, Menu, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { streamChat } from '../api/stream-chat';
 import { generateAiTitle } from '../api/generate-title';
+import { getConversations } from '../api/get-conversations';
+import { createConversation } from '../api/create-conversation';
+import { getMessages } from '../api/get-messages';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/stores/chat';
-import {
-  createAiConversation,
-  fetchConversations,
-  fetchMessages,
-  type ChatMessage as ChatMessageResponse,
-} from '@/features/chat/api/chat';
+import { ConversationList } from './conversation-list';
 
 export function ChatView() {
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const conversations = useChatStore((state) => state.conversations);
@@ -23,6 +22,7 @@ export function ChatView() {
     (state) => state.activeConversationId,
   );
   const setConversations = useChatStore((state) => state.setConversations);
+  const mergeConversations = useChatStore((state) => state.mergeConversations);
   const upsertConversation = useChatStore((state) => state.upsertConversation);
   const setActiveConversationId = useChatStore(
     (state) => state.setActiveConversationId,
@@ -32,46 +32,40 @@ export function ChatView() {
   const addMessage = useChatStore((state) => state.addMessage);
   const appendMessage = useChatStore((state) => state.appendMessage);
   const setMessageContent = useChatStore((state) => state.setMessageContent);
+  const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setConversationTitle = useChatStore(
     (state) => state.setConversationTitle,
   );
 
   useEffect(() => {
-    const loadConversations = async () => {
-      const list = await fetchConversations('ai');
-      const existing = useChatStore.getState().conversations;
-      const currentActive = useChatStore.getState().activeConversationId;
-      const mapped = list.map((conv) => ({
-        id: conv._id,
-        title: conv.title || 'AI 对话',
-        createdAt: conv.lastMessageAt
-          ? new Date(conv.lastMessageAt).getTime()
-          : Date.now(),
-        messages:
-          existing.find((item) => item.id === conv._id)?.messages || [],
-      }));
-      setConversations(mapped);
-      if (mapped.length > 0) {
-        const nextId =
-          mapped.find((item) => item.id === currentActive)?.id ||
-          mapped[0].id;
-        setActiveConversationId(nextId);
-      } else {
-        const created = await createAiConversation();
-        upsertConversation({
-          id: created._id,
-          title: created.title || 'AI 对话',
-          createdAt: Date.now(),
-          messages: [],
-        });
-        setActiveConversationId(created._id);
+    const loadData = async () => {
+      try {
+        const convos = await getConversations();
+        // 如果本地没有对话，直接设置；如果有，则合并
+        if (conversations.length === 0) {
+          setConversations(convos);
+        } else {
+          mergeConversations(convos);
+        }
+
+        // 如果有选中的对话，加载其消息
+        // 或者如果没有选中的对话且有列表，默认选中第一个并加载消息
+        let targetId = activeConversationId;
+        if (!targetId && convos.length > 0) {
+          targetId = convos[0].id;
+          setActiveConversationId(targetId);
+        }
+
+        if (targetId) {
+          const msgs = await getMessages(targetId);
+          setMessages(targetId, msgs);
+        }
+      } catch (error) {
+        console.error('Failed to load chat data', error);
       }
     };
-    loadConversations().catch(() => {
-      setConversations([]);
-      setActiveConversationId(null);
-    });
-  }, [setActiveConversationId, setConversations, upsertConversation]);
+    loadData();
+  }, []); // 仅在挂载时执行一次
 
   const activeConversation = useMemo(
     () =>
@@ -79,31 +73,12 @@ export function ChatView() {
     [conversations, activeConversationId],
   );
 
+  // 移除切换对话时从服务器加载历史消息的逻辑
+  /*
   useEffect(() => {
-    if (!activeConversationId) {
-      return;
-    }
-    if (!/^[0-9a-fA-F]{24}$/.test(activeConversationId)) {
-      return;
-    }
-    if (isStreaming) {
-      return;
-    }
-    const loadMessages = async () => {
-      const list = await fetchMessages(activeConversationId);
-      const mapped = list.map((item: ChatMessageResponse) => ({
-        id: item._id,
-        role: item.role,
-        content: item.content,
-        createdAt: new Date(item.createdAt).getTime(),
-      }));
-      if (mapped.length === 0 && activeConversation?.messages.length) {
-        return;
-      }
-      setMessages(activeConversationId, mapped);
-    };
-    loadMessages().catch(() => {});
-  }, [activeConversationId, activeConversation?.messages.length, isStreaming, setMessages]);
+    // ... removed fetchMessages logic
+  }, [activeConversationId, setMessages]);
+  */
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [
     input,
@@ -130,73 +105,88 @@ export function ChatView() {
     }
     let currentConversationId = activeConversationId;
     if (!currentConversationId) {
-      const created = await createAiConversation();
-      upsertConversation({
-        id: created._id,
-        title: created.title || 'AI 对话',
-        createdAt: Date.now(),
-        messages: [],
-      });
-      setActiveConversationId(created._id);
-      currentConversationId = created._id;
+      try {
+        const newConvo = await createConversation();
+        upsertConversation(newConvo);
+        setActiveConversationId(newConvo.id);
+        currentConversationId = newConvo.id;
+      } catch (error) {
+        console.error('Failed to create conversation', error);
+        // Fallback to local
+        const id = Date.now().toString();
+        upsertConversation({
+          id,
+          title: 'AI 对话',
+          createdAt: Date.now(),
+          messages: [],
+        });
+        setActiveConversationId(id);
+        currentConversationId = id;
+      }
     }
-    const userMessageId = `user-${Date.now()}`;
-    const assistantId = `assistant-${Date.now()}`;
+
+    const userMessageId = Date.now().toString();
+    const assistantId = (Date.now() + 1).toString();
+
+    // 立即添加到本地显示
     addMessage(currentConversationId, {
       id: userMessageId,
       role: 'user',
       content,
+      status: 'sending',
       createdAt: Date.now(),
     });
+    
+    // 添加 AI 消息占位符
     addMessage(currentConversationId, {
       id: assistantId,
       role: 'assistant',
       content: '',
+      status: 'streaming',
       createdAt: Date.now(),
     });
-    const shouldGenerateTitle = !activeConversation || activeConversation.messages.length === 0;
-    if (shouldGenerateTitle) {
-      setConversationTitle(
-        currentConversationId,
-        content.slice(0, 20) || '新的对话',
-      );
-      generateAiTitle(content, currentConversationId)
-        .then((result) => {
-          if (result?.title) {
-            setConversationTitle(currentConversationId, result.title);
-          }
-        })
-        .catch(() => {});
-    }
+
     setInput('');
     setIsStreaming(true);
-
     const controller = new AbortController();
     controllerRef.current = controller;
 
+    // 只有在发送第一条消息时才生成标题
+    const conversation = conversations.find((c) => c.id === currentConversationId);
+    const isFirstMessage = !conversation || conversation.messages.length <= 1;
+
     try {
+      // Use original streamChat signature
       await streamChat(
         content,
         currentConversationId,
-        (conversationId) => {
-          if (!conversationId) {
-            return;
-          }
-          upsertConversation({
-            id: conversationId,
-            title: 'AI 对话',
-            createdAt: Date.now(),
-            messages: [],
-          });
-          setActiveConversationId(conversationId);
-        },
+        () => {},
         (chunk) => {
           updateAssistant(assistantId, chunk);
         },
         controller.signal,
       );
-    } catch {
+      
+      setMessageStatus(currentConversationId, userMessageId, 'synced');
+      setMessageStatus(currentConversationId, assistantId, 'synced');
+      
+      // 生成标题
+      if (isFirstMessage) {
+        generateAiTitle(content, currentConversationId).then((result) => {
+          if (result?.title) {
+            setConversationTitle(currentConversationId!, result.title);
+          }
+        }).catch(() => {});
+      }
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        return;
+      }
+      console.error('Stream chat error:', error);
+      // 流式传输失败
       if (currentConversationId) {
+        setMessageStatus(currentConversationId, userMessageId, 'failed');
+        setMessageStatus(currentConversationId, assistantId, 'failed');
         setMessageContent(
           currentConversationId,
           assistantId,
@@ -204,24 +194,6 @@ export function ChatView() {
         );
       }
     } finally {
-      if (
-        currentConversationId &&
-        /^[0-9a-fA-F]{24}$/.test(currentConversationId)
-      ) {
-        fetchMessages(currentConversationId)
-          .then((list) => {
-            const mapped = list.map((item: ChatMessageResponse) => ({
-              id: item._id,
-              role: item.role,
-              content: item.content,
-              createdAt: new Date(item.createdAt).getTime(),
-            }));
-            if (mapped.length > 0) {
-              setMessages(currentConversationId, mapped);
-            }
-          })
-          .catch(() => {});
-      }
       setIsStreaming(false);
       controllerRef.current = null;
     }
@@ -240,70 +212,84 @@ export function ChatView() {
     setIsStreaming(false);
   };
 
-  const handleNewConversation = () => {
+  const handleNewConversation = async () => {
     stopStreaming();
-    createAiConversation()
-      .then((conversation) => {
-        upsertConversation({
-          id: conversation._id,
-          title: conversation.title || 'AI 对话',
-          createdAt: Date.now(),
-          messages: [],
-        });
-        setActiveConversationId(conversation._id);
-      })
-      .catch(() => {
-        setActiveConversationId(null);
+    // 检查是否已有空的对话
+    const emptyConversation = conversations.find(
+      (c) => c.messages.length === 0,
+    );
+    if (emptyConversation) {
+      setActiveConversationId(emptyConversation.id);
+      return;
+    }
+
+    try {
+      const newConvo = await createConversation();
+      upsertConversation(newConvo);
+      setActiveConversationId(newConvo.id);
+    } catch (error) {
+      console.error('Failed to create conversation', error);
+      // Fallback to local
+      const id = Date.now().toString();
+      upsertConversation({
+        id,
+        title: 'AI 对话',
+        createdAt: Date.now(),
+        messages: [],
       });
+      setActiveConversationId(id);
+    }
   };
 
-  const handleSwitchConversation = (id: string) => {
+  const handleSwitchConversation = async (id: string) => {
     stopStreaming();
     switchConversation(id);
+    // 如果对话内容为空，尝试从服务器加载
+    const targetConvo = conversations.find(c => c.id === id);
+    if (targetConvo && targetConvo.messages.length === 0) {
+      try {
+        const msgs = await getMessages(id);
+        setMessages(id, msgs);
+      } catch (error) {
+        console.error('Failed to load messages', error);
+      }
+    }
   };
 
   return (
-    <div className="flex-1 p-3 md:p-5 theme-muted h-screen overflow-hidden">
+    <div className="flex-1 p-3 md:p-5 theme-muted h-screen overflow-hidden relative">
       <div className="w-full h-full flex flex-col">
         <div className="bg-card text-card-foreground rounded-3xl shadow-sm border border-border flex-1 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-            <div className="md:w-64 border-b md:border-b-0 md:border-r border-border p-4 space-y-3 flex flex-col min-h-0">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-foreground">对话列表</span>
-                <button
-                  onClick={handleNewConversation}
-                  className="h-8 w-8 rounded-full bg-muted text-muted-foreground hover:bg-muted/80 flex items-center justify-center transition"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="space-y-2 flex-1 min-h-0 overflow-y-auto scrollbar-hidden pr-1">
-                {conversations.map((conv) => (
-                  <button
-                    key={conv.id}
-                    onClick={() => handleSwitchConversation(conv.id)}
-                    className={cn(
-                      'w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition',
-                      conv.id === activeConversationId
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'hover:bg-muted text-muted-foreground',
-                    )}
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span className="truncate">{conv.title}</span>
-                  </button>
-                ))}
-              </div>
+            {/* Desktop Sidebar */}
+            <div className="hidden md:flex md:w-64 border-r border-border p-4 flex-col min-h-0">
+              <ConversationList
+                onSelect={handleSwitchConversation}
+                onNew={handleNewConversation}
+              />
             </div>
 
             <div className="flex-1 min-h-0 flex flex-col">
+              {/* Mobile Header */}
+              <div className="md:hidden flex items-center p-3 border-b border-border">
+                <button 
+                  onClick={() => setIsDrawerOpen(true)}
+                  className="mr-2 p-1 -ml-1 hover:bg-muted rounded-full"
+                >
+                  <Menu className="w-5 h-5 text-foreground" />
+                </button>
+                <span className="font-semibold truncate text-foreground">
+                  {activeConversation?.title || '对话'}
+                </span>
+              </div>
+
               <div
                 ref={listRef}
-                className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4 scrollbar-hidden"
+                className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4 scrollbar-hidden"
               >
                 {!activeConversation || activeConversation.messages.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-16 space-y-4">
-                    <Sparkles className="w-12 h-12 mx-auto text-muted-foreground/60" />
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
+                    <Sparkles className="w-12 h-12 text-muted-foreground/60" />
                     <p>开始一次新的对话...</p>
                   </div>
                 ) : (
@@ -395,6 +381,35 @@ export function ChatView() {
           </div>
         </div>
       </div>
+      {/* Mobile Drawer Overlay */}
+      {isDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/50 transition-opacity"
+            onClick={() => setIsDrawerOpen(false)}
+          />
+          {/* Drawer Panel */}
+          <div className="relative w-64 h-full bg-background border-r border-border shadow-xl transform transition-transform duration-300 ease-in-out p-4 flex flex-col">
+             <div className="flex justify-end mb-2">
+                <button onClick={() => setIsDrawerOpen(false)} className="p-1 hover:bg-muted rounded-full">
+                  <X className="w-5 h-5 text-muted-foreground" />
+                </button>
+             </div>
+             <ConversationList 
+               onSelect={(id) => {
+                 handleSwitchConversation(id);
+                 setIsDrawerOpen(false);
+               }}
+               onNew={() => {
+                 handleNewConversation();
+                 setIsDrawerOpen(false);
+               }}
+               className="flex-1"
+             />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
