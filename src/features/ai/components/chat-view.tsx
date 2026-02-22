@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, Fragment } from 'react';
 import {
   Sparkles,
   Send,
@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import { useChatStore } from '@/stores/chat';
 import { useAuthStore } from '@/stores/auth';
 import { ConversationList } from './conversation-list';
+import { formatMessageTime, shouldShowTimestamp } from '@/lib/date-utils';
 
 function ReasoningBlock({ content }: { content: string }) {
   const [expanded, setExpanded] = useState(true);
@@ -458,9 +459,20 @@ export function ChatView() {
                     <p>开始一次新的对话...</p>
                   </div>
                 ) : (
-                  activeConversation.messages.map((message) => (
+                  activeConversation.messages.map((message, index) => {
+                    const prevMessage = activeConversation.messages[index - 1];
+                    const showTimestamp = shouldShowTimestamp(message.createdAt, prevMessage?.createdAt);
+
+                    return (
+                    <Fragment key={message.id}>
+                      {showTimestamp && (
+                        <div className="flex justify-center my-4 select-none">
+                          <span className="text-xs text-muted-foreground/60 bg-muted/40 px-2 py-0.5 rounded text-center">
+                            {formatMessageTime(message.createdAt)}
+                          </span>
+                        </div>
+                      )}
                     <div
-                      key={message.id}
                       id={`message-${message.id}`}
                       className={cn(
                         'flex items-start gap-3 scroll-mt-20',
@@ -517,7 +529,8 @@ export function ChatView() {
                         </div>
                       )}
                     </div>
-                  ))
+                    </Fragment>
+                  );})
                 )}
               </div>
 
