@@ -99,7 +99,7 @@ export function UserChatView() {
         fetchFriendRequests(),
       ]);
       setUsers(
-        userList.filter((item) => item.id !== (currentUser?.userId || -1)),
+        userList.filter((item) => String(item.id) !== String(currentUser?.userId || -1)),
       );
       setConversations(convoList);
       setFriends(friendList);
@@ -528,10 +528,10 @@ export function UserChatView() {
                             </div>
                           </div>
                         </div>
-                        <div>
+                        <div className="shrink-0 ml-2">
                           {isFriend ? (
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-green-600">已添加</span>
+                              <span className="text-xs text-green-600 whitespace-nowrap">已添加</span>
                               <button
                                 onClick={() => handleDeleteFriend(item.id)}
                                 className="text-muted-foreground hover:text-destructive p-1 rounded-full hover:bg-muted-foreground/10 transition-colors"
@@ -541,11 +541,11 @@ export function UserChatView() {
                               </button>
                             </div>
                           ) : pendingOutgoing ? (
-                            <span className="text-xs text-muted-foreground">待确认</span>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">待确认</span>
                           ) : (
                             <button
                               onClick={() => handleSendFriendRequest(item.id)}
-                              className="text-xs text-blue-600 hover:text-blue-700"
+                              className="text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap"
                             >
                               添加
                             </button>

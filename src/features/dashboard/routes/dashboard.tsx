@@ -2,12 +2,13 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import type { TabType } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/stores/auth';
-import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, Grid3X3 } from 'lucide-react';
 import { ChatView } from '@/features/ai/components/chat-view';
 import { UserChatView } from '@/features/chat/components/user-chat-view';
 import { SettingsView } from '@/features/settings/components/settings-view';
 import { ImageGenView } from '@/features/image-gen/components/image-gen-view';
 import { PlaneShooterGame } from '@/features/game/components/plane-shooter-game';
+import { GomokuGame } from '@/features/game/components/gomoku/gomoku-game';
 import { VideoPlannerPage } from '@/features/video-task/components/video-planner-page';
 import { WatchPartyPage } from '@/features/watch-party/components/watch-party-page';
 import { useThemeStore } from '@/stores/theme';
@@ -200,6 +201,8 @@ export function Dashboard() {
         return <SettingsView />;
       case 'game':
         return <PlaneShooterGame />;
+      case 'gomoku':
+        return <GomokuGame />;
       case 'image':
         return <ImageGenView />;
       case 'voice':
@@ -256,6 +259,8 @@ export function Dashboard() {
             {activeTab === 'image' && '绘图'}
             {activeTab === 'voice' && '语音'}
             {activeTab === 'settings' && '设置'}
+            {activeTab === 'game' && '星际战机'}
+            {activeTab === 'gomoku' && '五子棋'}
           </h1>
           <div className="flex items-center space-x-4">
             <div className="hidden lg:flex items-center gap-3 rounded-full border theme-border bg-background/70 px-3 py-1 text-xs text-muted-foreground">
@@ -336,9 +341,11 @@ export function Dashboard() {
                   { id: 'chat', label: '对话', icon: Sparkles },
                   { id: 'user', label: '用户', icon: Users },
                   { id: 'video-task', label: '视频企划', icon: Video },
+                  { id: 'watch-party', label: '放映室', icon: Clapperboard },
                   { id: 'image', label: '绘图', icon: ImageIcon },
                   { id: 'voice', label: '语音', icon: Mic },
-                  { id: 'game', label: '游戏', icon: Gamepad2 },
+                  { id: 'game', label: '星际战机', icon: Gamepad2 },
+                  { id: 'gomoku', label: '五子棋', icon: Grid3X3 },
                   { id: 'settings', label: '设置', icon: Settings },
                 ].map((item) => {
                   const Icon = item.icon;

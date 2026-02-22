@@ -11,12 +11,13 @@ import {
   Gamepad2,
   Video,
   Clapperboard,
+  Grid3X3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useNavigate } from 'react-router-dom';
 
-export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings' | 'game' | 'video-task' | 'watch-party';
+export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings' | 'game' | 'video-task' | 'watch-party' | 'gomoku';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -43,6 +44,7 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
     { id: 'image', icon: ImageIcon, label: 'AI 图片/视频', color: 'text-purple-500' },
     { id: 'voice', icon: Mic, label: 'AI 语音', color: 'text-green-500' },
     { id: 'game', icon: Gamepad2, label: '星际战机', color: 'text-orange-500' },
+    { id: 'gomoku', icon: Grid3X3, label: '五子棋', color: 'text-emerald-500' },
     { id: 'settings', icon: Settings, label: '设置', color: 'text-gray-500' },
   ] as const;
 

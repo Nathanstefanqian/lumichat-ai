@@ -37,7 +37,7 @@ export function AvatarUpload() {
 
   const { user, setUser } = useAuthStore();
 
-  const onCropComplete = useCallback((croppedArea: any, croppedAreaPixels: any) => {
+  const onCropComplete = useCallback((_croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
   }, []);
 
