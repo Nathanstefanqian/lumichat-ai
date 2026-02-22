@@ -496,6 +496,8 @@ export function ChatView() {
                           ) : (
                             <span className="typing-dots" aria-label="typing">
                               <span />
+                              <span />
+                              <span />
                             </span>
                           )}
                         </div>

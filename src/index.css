@@ -128,3 +128,31 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .typing-dots {
+    @apply flex items-center gap-1 px-1;
+  }
+  
+  .typing-dots span {
+    @apply w-1.5 h-1.5 rounded-full bg-current opacity-60;
+    animation: typing 1.4s infinite ease-in-out both;
+  }
+  
+  .typing-dots span:nth-child(1) {
+    animation-delay: -0.32s;
+  }
+  
+  .typing-dots span:nth-child(2) {
+    animation-delay: -0.16s;
+  }
+  
+  @keyframes typing {
+    0%, 80%, 100% {
+      transform: scale(0);
+    }
+    40% {
+      transform: scale(1);
+    }
+  }
+}
