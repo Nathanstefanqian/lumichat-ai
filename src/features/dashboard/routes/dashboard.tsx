@@ -2,12 +2,19 @@ import { useEffect, useState } from 'react';
 import { Sidebar } from '@/components/layout/sidebar';
 import type { TabType } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/stores/auth';
-import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video } from 'lucide-react';
 import { ChatView } from '@/features/ai/components/chat-view';
 import { UserChatView } from '@/features/chat/components/user-chat-view';
 import { SettingsView } from '@/features/settings/components/settings-view';
+import { ImageGenView } from '@/features/image-gen/components/image-gen-view';
+import { PlaneShooterGame } from '@/features/game/components/plane-shooter-game';
+import { VideoPlannerPage } from '@/features/video-task/components/video-planner-page';
+import { WatchPartyPage } from '@/features/watch-party/components/watch-party-page';
 import { useThemeStore } from '@/stores/theme';
 import { useSocketStore } from '@/stores/socket';
+import { useUserChatStore } from '@/stores/user-chat';
+import { fetchUsers, type ChatMessage, type ChatConversation } from '@/features/chat/api/chat';
+import { toast } from 'sonner';
 
 const ACTIVE_TAB_KEY = 'dashboard-active-tab';
 
@@ -17,12 +24,22 @@ export function Dashboard() {
     return saved || 'chat';
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const user = useAuthStore((state) => state.user);
+  const token = useAuthStore((state) => state.token);
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
+  
+  // Socket & Chat Store
   const socketStatus = useSocketStore((state) => state.status);
   const socketLastEvent = useSocketStore((state) => state.lastEvent);
-  const socketLastUpdatedAt = useSocketStore((state) => state.lastUpdatedAt);
+  const connectSocket = useSocketStore((state) => state.connect);
+  const disconnectSocket = useSocketStore((state) => state.disconnect);
+  const socket = useSocketStore((state) => state.socket);
+  const setUsers = useUserChatStore((state) => state.setUsers);
+  const users = useUserChatStore((state) => state.users);
+  const activeConversationId = useUserChatStore((state) => state.activeConversationId);
+  const setActiveConversationId = useUserChatStore((state) => state.setActiveConversationId);
 
   const themeOptions = [
     { id: 'light', label: '亮色', icon: Sun },
@@ -30,6 +47,125 @@ export function Dashboard() {
     { id: 'green', label: '护眼', icon: Leaf },
     { id: 'purple', label: '浪漫', icon: Heart },
   ] as const;
+
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Connect Socket & Fetch Users
+  useEffect(() => {
+    if (token) {
+      connectSocket(token);
+      fetchUsers().then(setUsers).catch(console.error);
+    }
+    return () => {
+      disconnectSocket();
+    };
+  }, [token, connectSocket, disconnectSocket, setUsers]);
+
+  // Global Notification Listener
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleMessage = (payload: { conversationId: string; message: ChatMessage; conversation: ChatConversation }) => {
+      // Don't notify for own messages
+      if (String(payload.message.senderId) === String(user?.userId)) return;
+
+      const isUserChatActive = activeTab === 'user';
+      const isViewingConversation = isUserChatActive && activeConversationId === payload.conversationId;
+
+      if (!isViewingConversation) {
+        const senderId = payload.message.senderId;
+        const sender = users.find((u) => u.id === senderId);
+        const senderName = sender?.username || `用户 ${senderId}`;
+        const avatarChar = (senderName[0] || '?').toUpperCase();
+
+        toast.custom((t) => (
+          <div className="flex w-full md:w-96 items-start gap-4 rounded-2xl bg-white/95 dark:bg-zinc-900/95 p-5 shadow-xl border border-border backdrop-blur-md animate-in slide-in-from-right-full duration-300">
+            <div className="shrink-0 pt-0.5">
+              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-base shadow-sm">
+                {avatarChar}
+              </div>
+            </div>
+            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
+               setActiveTab('user');
+               setActiveConversationId(payload.conversationId);
+               toast.dismiss(t);
+            }}>
+              <div className="flex items-center justify-between">
+                <p className="text-base font-semibold text-foreground">
+                  {senderName}
+                </p>
+                <span className="text-xs text-muted-foreground">刚刚</span>
+              </div>
+              <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                {payload.message.content}
+              </p>
+            </div>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                toast.dismiss(t);
+              }} 
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors -mr-2 -mt-2 p-2 rounded-full hover:bg-muted/50"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        ), { duration: 5000, position: 'top-right' });
+      }
+    };
+
+    const handleFriendRequest = (request: { requesterId: number }) => {
+      const sender = users.find((u) => u.id === request.requesterId);
+      const senderName = sender?.username || `用户 ${request.requesterId}`;
+
+      toast.custom((t) => (
+        <div className="flex w-full md:w-96 items-start gap-4 rounded-2xl bg-white/95 dark:bg-zinc-900/95 p-5 shadow-xl border border-border backdrop-blur-md animate-in slide-in-from-right-full duration-300">
+          <div className="shrink-0 pt-0.5">
+            <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-base shadow-sm">
+              <UserPlus className="w-6 h-6" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => {
+             setActiveTab('user');
+             toast.dismiss(t);
+          }}>
+            <div className="flex items-center justify-between">
+              <p className="text-base font-semibold text-foreground">
+                好友请求
+              </p>
+              <span className="text-xs text-muted-foreground">刚刚</span>
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+              <span className="font-medium text-foreground">{senderName}</span> 请求添加您为好友
+            </p>
+          </div>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              toast.dismiss(t);
+            }} 
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors -mr-2 -mt-2 p-2 rounded-full hover:bg-muted/50"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      ), { duration: 8000, position: 'top-right' });
+    };
+
+    socket.on('chat:message', handleMessage);
+    socket.on('friend:request', handleFriendRequest);
+    return () => {
+      socket.off('chat:message', handleMessage);
+      socket.off('friend:request', handleFriendRequest);
+    };
+  }, [socket, activeTab, activeConversationId, users, user?.userId, setActiveConversationId]);
 
   const socketBadge = () => {
     switch (socketStatus) {
@@ -56,43 +192,19 @@ export function Dashboard() {
     switch (activeTab) {
       case 'chat':
         return <ChatView />;
+      case 'video-task':
+        return <VideoPlannerPage />;
+      case 'watch-party':
+        return <WatchPartyPage />;
       case 'settings':
         return <SettingsView />;
+      case 'game':
+        return <PlaneShooterGame />;
       case 'image':
-        return (
-          <div className="flex-1 p-8 theme-muted h-screen overflow-y-auto">
-            <div className="max-w-4xl mx-auto space-y-8">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 theme-accent rounded-2xl shadow-sm">
-                  <ImageIcon className="w-8 h-8 text-foreground" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold theme-text">AI 创意工坊</h2>
-                  <p className="theme-subtle">将您的想象转化为令人惊叹的视觉艺术</p>
-                </div>
-              </div>
-
-              {/* Image Gen Interface Placeholder */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="theme-surface rounded-3xl shadow-sm border h-64 flex items-center justify-center">
-                   <div className="text-center space-y-2">
-                     <ImageIcon className="w-8 h-8 mx-auto text-muted-foreground" />
-                     <p className="theme-subtle text-sm">上传参考图</p>
-                   </div>
-                </div>
-                <div className="theme-surface rounded-3xl shadow-sm border h-64 flex items-center justify-center theme-muted">
-                   <div className="text-center space-y-2">
-                     <Sparkles className="w-8 h-8 mx-auto text-foreground animate-pulse" />
-                     <p className="font-medium theme-text">生成结果展示区</p>
-                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
+        return <ImageGenView />;
       case 'voice':
         return (
-          <div className="flex-1 p-8 theme-muted h-screen overflow-y-auto">
+          <div className="flex-1 p-4 md:p-8 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-8 theme-muted overflow-y-auto scrollbar-hidden">
             <div className="max-w-4xl mx-auto space-y-8">
               <div className="flex items-center space-x-4">
                 <div className="p-3 theme-accent rounded-2xl shadow-sm">
@@ -124,7 +236,7 @@ export function Dashboard() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background font-sans theme-page">
+    <div className="flex h-[100dvh] overflow-hidden bg-background font-sans theme-page">
       <div className="hidden md:block">
         <Sidebar 
           isOpen={isSidebarOpen} 
@@ -139,18 +251,23 @@ export function Dashboard() {
           <h1 className="text-lg font-semibold theme-text">
             {activeTab === 'chat' && '对话'}
             {activeTab === 'user' && '用户对话'}
+            {activeTab === 'video-task' && '视频企划'}
+            {activeTab === 'watch-party' && '浪漫放映室'}
             {activeTab === 'image' && '绘图'}
             {activeTab === 'voice' && '语音'}
             {activeTab === 'settings' && '设置'}
           </h1>
           <div className="flex items-center space-x-4">
             <div className="hidden lg:flex items-center gap-3 rounded-full border theme-border bg-background/70 px-3 py-1 text-xs text-muted-foreground">
-              <span className={`h-2.5 w-2.5 rounded-full ${socketBadge()}`} />
+              <span 
+                className={`h-2.5 w-2.5 rounded-full ${socketBadge()} animate-pulse scale-110`} 
+                style={{
+                  animationDuration: '1s'
+                }}
+              />
               <span>WS: {socketStatus}</span>
               <span>{socketLastEvent ? `事件: ${socketLastEvent}` : '等待事件'}</span>
-              {socketLastUpdatedAt && (
-                <span>{new Date(socketLastUpdatedAt).toLocaleTimeString()}</span>
-              )}
+              <span className="font-mono">{currentTime.toLocaleTimeString()}</span>
             </div>
             <div className="hidden md:flex items-center gap-2 rounded-full border theme-border bg-background/60 px-2 py-1 backdrop-blur">
               {themeOptions.map((option) => {
@@ -188,32 +305,82 @@ export function Dashboard() {
 
         {renderContent()}
 
-        <div className="md:hidden border-t theme-border theme-surface pb-safe">
-          <div className="flex justify-around items-center h-16">
-            {[
-              { id: 'chat', label: '对话', icon: Sparkles },
-              { id: 'user', label: '用户', icon: Users },
-              { id: 'image', label: '绘图', icon: ImageIcon },
-              { id: 'voice', label: '语音', icon: Mic },
-              { id: 'settings', label: '设置', icon: Settings },
-            ].map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id as TabType)}
-                  className={`flex flex-col items-center justify-center w-full h-full space-y-1 ${
-                    isActive ? 'theme-text' : 'theme-subtle'
-                  }`}
+        {/* Mobile Menu Button */}
+        <button
+          onClick={() => setIsMobileMenuOpen(true)}
+          className="md:hidden fixed top-3 right-4 z-50 p-2 rounded-full bg-background/80 backdrop-blur border theme-border shadow-sm text-foreground hover:bg-muted"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
+        {/* Mobile Menu Drawer */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden fixed inset-0 z-[100] flex justify-end">
+            <div 
+              className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" 
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+            <div className="relative w-64 h-full bg-background border-l theme-border shadow-xl p-6 flex flex-col animate-in slide-in-from-right duration-300">
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-lg font-bold theme-text">菜单</h2>
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 -mr-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
                 >
-                  <Icon className="w-5 h-5" />
-                  <span className="text-[10px]">{item.label}</span>
+                  <X className="w-5 h-5" />
                 </button>
-              );
-            })}
+              </div>
+
+              <nav className="space-y-2 flex-1">
+                {[
+                  { id: 'chat', label: '对话', icon: Sparkles },
+                  { id: 'user', label: '用户', icon: Users },
+                  { id: 'video-task', label: '视频企划', icon: Video },
+                  { id: 'image', label: '绘图', icon: ImageIcon },
+                  { id: 'voice', label: '语音', icon: Mic },
+                  { id: 'game', label: '游戏', icon: Gamepad2 },
+                  { id: 'settings', label: '设置', icon: Settings },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveTab(item.id as TabType);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                        isActive
+                          ? 'bg-primary text-primary-foreground font-medium'
+                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              <div className="border-t theme-border pt-6 mt-6">
+                <div className="flex items-center gap-3 px-2">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-400 to-pink-500 p-[2px]">
+                    <div className="w-full h-full rounded-full bg-background flex items-center justify-center overflow-hidden">
+                      <span className="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-600">
+                        {(user?.username || 'G')[0].toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium theme-text truncate">{user?.username || 'Guest'}</p>
+                    <p className="text-xs theme-subtle truncate">{user?.email || 'guest@example.com'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

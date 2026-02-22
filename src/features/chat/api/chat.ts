@@ -34,9 +34,9 @@ export const fetchConversations = (type?: 'ai' | 'user') => {
     .then((res) => res as unknown as ChatConversation[]);
 };
 
-export const createAiConversation = () => {
+export const createAiConversation = (title?: string) => {
   return api
-    .post('/chat/conversations/ai')
+    .post('/chat/conversations/ai', { title })
     .then((res) => res as unknown as ChatConversation);
 };
 
@@ -106,4 +106,10 @@ export const rejectFriendRequest = (requestId: string) => {
   return api
     .post(`/friends/requests/${requestId}/reject`)
     .then((res) => res as unknown as FriendRequest);
+};
+
+export const deleteFriend = (targetUserId: number) => {
+  return api
+    .delete(`/friends/${targetUserId}`)
+    .then((res) => res as unknown as { success: boolean });
 };

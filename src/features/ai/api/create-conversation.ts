@@ -1,28 +1,19 @@
+import api from '@/lib/axios';
 import type { Conversation } from '@/stores/chat';
 
-export async function createConversation(): Promise<Conversation> {
-  const token = localStorage.getItem('auth-storage');
-  const parsed = token ? JSON.parse(token) : null;
-  const authToken = parsed?.state?.token;
-
-  const response = await fetch('/api/chat/conversations/ai', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to create conversation');
+export const createAiConversation = async (title?: string): Promise<Conversation> => {
+  const response = await api.post('/chat/conversations/ai', { title });
+  // Ensure we have data
+  const data = (response as unknown as { _id: string; title: string; createdAt: string }) || {};
+  
+  if (!data._id) {
+    throw new Error('Failed to create conversation: Invalid response');
   }
 
-  const data = await response.json();
-  
   return {
     id: data._id,
-    title: data.title || '新对话',
-    createdAt: new Date(data.createdAt).getTime(),
+    title: data.title || 'AI 对话',
+    createdAt: data.createdAt ? new Date(data.createdAt).getTime() : Date.now(),
     messages: [],
   };
-}
+};

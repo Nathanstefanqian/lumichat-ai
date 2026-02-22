@@ -9,6 +9,7 @@ export interface ChatMessage {
   serverId?: string;  // 服务器返回的真实 ID
   role: ChatRole;
   content: string;
+  reasoning_content?: string;
   status: MessageStatus;  // 消息状态
   createdAt: number;
 }
@@ -32,11 +33,14 @@ interface ChatState {
   switchConversation: (id: string) => void;
   addMessage: (conversationId: string, message: ChatMessage) => void;
   appendMessage: (conversationId: string, messageId: string, chunk: string) => void;
+  appendReasoning: (conversationId: string, messageId: string, chunk: string) => void;
   setMessageContent: (conversationId: string, messageId: string, content: string) => void;
   setMessageStatus: (conversationId: string, messageId: string, status: MessageStatus) => void;
   updateMessageServerId: (conversationId: string, localId: string, serverId: string) => void;
   setConversationTitle: (conversationId: string, title: string) => void;
   clearMessages: (conversationId: string) => void;
+  removeConversation: (id: string) => void;
+  clearAllConversations: () => void;
 }
 
 const createId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -66,6 +70,22 @@ export const useChatStore = create<ChatState>()(
             };
           }),
         }));
+      },
+      removeConversation: (id) => {
+        set((state) => {
+          const newConversations = state.conversations.filter(
+            (item) => item.id !== id,
+          );
+          let nextActiveId = state.activeConversationId;
+          if (state.activeConversationId === id) {
+            nextActiveId =
+              newConversations.length > 0 ? newConversations[0].id : null;
+          }
+          return {
+            conversations: newConversations,
+            activeConversationId: nextActiveId,
+          };
+        });
       },
       upsertConversation: (conversation) => {
         set((state) => {
@@ -131,20 +151,64 @@ export const useChatStore = create<ChatState>()(
         }));
       },
       appendMessage: (conversationId, messageId, chunk) => {
-        set((state) => ({
-          conversations: state.conversations.map((conv) =>
-            conv.id === conversationId
-              ? {
-                  ...conv,
-                  messages: conv.messages.map((msg) =>
-                    msg.id === messageId
-                      ? { ...msg, content: msg.content + chunk }
-                      : msg,
-                  ),
-                }
-              : conv,
-          ),
-        }));
+        set((state) => {
+          const conversation = state.conversations.find(
+            (c) => c.id === conversationId,
+          );
+          if (!conversation) return state;
+
+          const messageIndex = conversation.messages.findIndex(
+            (m) => m.id === messageId,
+          );
+          if (messageIndex === -1) return state;
+
+          const newMessages = [...conversation.messages];
+          newMessages[messageIndex] = {
+            ...newMessages[messageIndex],
+            content: newMessages[messageIndex].content + chunk,
+          };
+
+          const newConversation = {
+            ...conversation,
+            messages: newMessages,
+          };
+
+          return {
+            conversations: state.conversations.map((c) =>
+              c.id === conversationId ? newConversation : c,
+            ),
+          };
+        });
+      },
+      appendReasoning: (conversationId, messageId, chunk) => {
+        set((state) => {
+          const conversation = state.conversations.find(
+            (c) => c.id === conversationId,
+          );
+          if (!conversation) return state;
+
+          const messageIndex = conversation.messages.findIndex(
+            (m) => m.id === messageId,
+          );
+          if (messageIndex === -1) return state;
+
+          const newMessages = [...conversation.messages];
+          newMessages[messageIndex] = {
+            ...newMessages[messageIndex],
+            reasoning_content: (newMessages[messageIndex].reasoning_content || '') + chunk,
+          };
+
+          const newConversation = {
+            ...conversation,
+            messages: newMessages,
+          };
+
+          return {
+            conversations: state.conversations.map((c) =>
+              c.id === conversationId ? newConversation : c,
+            ),
+          };
+        });
       },
       setMessageContent: (conversationId, messageId, content) => {
         set((state) => ({
@@ -203,6 +267,12 @@ export const useChatStore = create<ChatState>()(
             conv.id === conversationId ? { ...conv, messages: [] } : conv,
           ),
         }));
+      },
+      clearAllConversations: () => {
+        set({
+          conversations: [],
+          activeConversationId: null,
+        });
       },
     }),
     {

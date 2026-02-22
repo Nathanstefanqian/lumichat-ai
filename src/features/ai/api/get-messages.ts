@@ -1,29 +1,24 @@
-import type { ChatMessage } from '@/stores/chat';
+import api from '@/lib/axios';
+import type { ChatMessage, ChatRole } from '@/stores/chat';
 
-export async function getMessages(conversationId: string): Promise<ChatMessage[]> {
-  const token = localStorage.getItem('auth-storage');
-  const parsed = token ? JSON.parse(token) : null;
-  const authToken = parsed?.state?.token;
+interface ApiMessage {
+  _id: string;
+  role: ChatRole;
+  content: string;
+  reasoning_content?: string;
+  createdAt: string;
+}
 
-  const response = await fetch(`/api/chat/conversations/${conversationId}/messages`, {
-    headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-    },
-  });
+export const getAiMessages = async (conversationId: string): Promise<ChatMessage[]> => {
+  const response = await api.get(`/chat/conversations/${conversationId}/messages`);
+  const data = (response as unknown as ApiMessage[]) || [];
 
-  if (!response.ok) {
-    throw new Error('Failed to fetch messages');
-  }
-
-  const data = await response.json();
-  
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return data.map((item: any) => ({
-    id: item._id,
+  return data.map((item) => ({
+    id: item._id, // Use server ID as ID
     role: item.role,
     content: item.content,
+    reasoning_content: item.reasoning_content,
     status: 'synced',
-    createdAt: new Date(item.createdAt).getTime(),
-    serverId: item._id,
+    createdAt: item.createdAt ? new Date(item.createdAt).getTime() : Date.now(),
   }));
-}
+};

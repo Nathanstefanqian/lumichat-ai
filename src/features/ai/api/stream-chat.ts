@@ -1,8 +1,12 @@
 export async function streamChat(
   message: string,
   conversationId: string | undefined,
+  enableThinking: boolean,
+  enableSearch: boolean,
+  temperature: number,
   onMeta: (conversationId: string) => void,
   onChunk: (chunk: string) => void,
+  onThinking: (thinking: string) => void,
   signal?: AbortSignal,
 ) {
   const token = localStorage.getItem('auth-storage');
@@ -14,7 +18,7 @@ export async function streamChat(
       'Content-Type': 'application/json',
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     },
-    body: JSON.stringify({ message, conversationId }),
+    body: JSON.stringify({ message, conversationId, enableThinking, enableSearch, temperature }),
     signal,
   });
 
@@ -55,6 +59,8 @@ export async function streamChat(
             onMeta(data);
           } else if (eventType === 'error') {
             throw new Error(data);
+          } else if (eventType === 'thinking') {
+            onThinking(data.replace(/\\n/g, '\n'));
           } else {
             onChunk(data.replace(/\\n/g, '\n'));
           }

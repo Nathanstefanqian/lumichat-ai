@@ -1,0 +1,97 @@
+{
+    "state": {
+        "conversations": [
+            {
+                "id": "6999363f36c44dc8d5473464",
+                "title": "AI 对话",
+                "createdAt": 1771648580645,
+                "messages": [
+                    {
+                        "id": "6999364236c44dc8d547346a",
+                        "serverId": "6999364236c44dc8d547346a",
+                        "role": "user",
+                        "content": "你好",
+                        "status": "synced",
+                        "createdAt": 1771648578174
+                    },
+                    {
+                        "id": "6999364436c44dc8d547346e",
+                        "serverId": "6999364436c44dc8d547346e",
+                        "role": "assistant",
+                        "content": "你好！很高兴见到你！😊 我是DeepSeek，由深度求索公司创造的AI助手。无论你有什么问题、需要什么帮助，或者只是想聊聊天，我都很乐意为你提供支持！\n\n我可以帮你解答各种问题，协助处理文档，进行创作和分析等等。有什么我可以为你做的吗？我会尽我所能热情地帮助你！✨",
+                        "status": "synced",
+                        "createdAt": 1771648580643
+                    }
+                ]
+            },
+            {
+                "id": "69978b8e36c44dc8d5473453",
+                "title": "AI 对话",
+                "createdAt": 1771539357129,
+                "messages": []
+            },
+            {
+                "id": "69978a720b815a73b24bbe02",
+                "title": "AI 对话",
+                "createdAt": 1771539080294,
+                "messages": []
+            },
+            {
+                "id": "699789540b815a73b24bbdb1",
+                "title": "AI 对话",
+                "createdAt": 1771538984730,
+                "messages": []
+            },
+            {
+                "id": "699789190b815a73b24bbd83",
+                "title": "AI 对话",
+                "createdAt": 1771538731171,
+                "messages": []
+            },
+            {
+                "id": "699789190b815a73b24bbd81",
+                "title": "AI 对话",
+                "createdAt": 1771538723472,
+                "messages": []
+            },
+            {
+                "id": "699788e20b815a73b24bbd4e",
+                "title": "AI 对话",
+                "createdAt": 1771538678161,
+                "messages": []
+            },
+            {
+                "id": "699788e20b815a73b24bbd50",
+                "title": "AI 对话",
+                "createdAt": 1771538672174,
+                "messages": []
+            },
+            {
+                "id": "69993bdea6cb59cd3d927e41",
+                "title": "AI 对话",
+                "createdAt": 1771650217454,
+                "messages": []
+            },
+            {
+                "id": "69993bdea6cb59cd3d927e3f",
+                "title": "AI 对话",
+                "createdAt": 1771650217454,
+                "messages": []
+            },
+            {
+                "id": "69993bd7a6cb59cd3d927e39",
+                "title": "AI 对话",
+                "createdAt": 1771650217454,
+                "messages": []
+            },
+            {
+                "id": "69993bd7a6cb59cd3d927e37",
+                "title": "AI 对话",
+                "createdAt": 1771650217454,
+                "messages": []
+            }
+        ],
+        "activeConversationId": "6999363f36c44dc8d5473464"
+    },
+    "version": 0
+}

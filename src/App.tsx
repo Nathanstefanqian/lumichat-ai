@@ -1,4 +1,5 @@
 import { Routes, Route } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import { LoginPage } from './features/auth/routes/login'
 import { RegisterPage } from './features/auth/routes/register'
 import { Dashboard } from './features/dashboard/routes/dashboard'
@@ -7,6 +8,7 @@ import { ProtectedRoute } from './lib/protected-route'
 function App() {
   return (
     <div className="min-h-screen bg-background font-sans antialiased text-foreground app-shell">
+      <Toaster position="top-right" />
       <div className="theme-effects" aria-hidden>
         <span className="theme-orb orb-1" />
         <span className="theme-orb orb-2" />
