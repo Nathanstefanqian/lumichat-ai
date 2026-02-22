@@ -325,7 +325,7 @@ export function WatchPartyPage() {
   }
 
   return (
-    <div ref={containerRef} className="flex h-full bg-black text-white overflow-hidden relative group/container">
+    <div ref={containerRef} className="flex flex-col md:flex-row h-full bg-black text-white overflow-hidden relative group/container">
       <input 
           type="file" 
           ref={fileInputRef} 
@@ -335,7 +335,12 @@ export function WatchPartyPage() {
       />
       {/* Main Video Area */}
       <div 
-        className="flex-1 relative flex flex-col justify-center items-center bg-black"
+        className={cn(
+            "relative flex flex-col justify-center items-center bg-black transition-all duration-300",
+            "w-full",
+            // Mobile: Video takes 40% height when chat is open, or full height when closed
+            showChat ? "h-[40vh] md:h-full md:flex-1" : "h-full md:flex-1"
+        )}
         onMouseMove={handleMouseMove}
         onMouseLeave={() => setShowControls(false)}
         onClick={() => {
@@ -399,39 +404,39 @@ export function WatchPartyPage() {
 
         {/* Top Bar (Overlay) */}
         <div className={cn(
-            "absolute top-0 left-0 right-0 z-20 p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 flex justify-between items-start",
+            "absolute top-0 left-0 right-0 z-20 p-2 md:p-4 bg-gradient-to-b from-black/80 to-transparent transition-opacity duration-300 flex justify-between items-start",
             showControls ? "opacity-100" : "opacity-0"
         )} onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center gap-3">
-                <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10 hover:bg-white/20 transition-colors">
-                    <span className="text-xs font-medium text-pink-300">ROOM</span>
-                    <span className="font-mono font-bold tracking-wider">{room.roomId}</span>
+            <div className="flex items-center gap-2 md:gap-3">
+                <div className="bg-white/10 backdrop-blur-md px-2 md:px-3 py-1 md:py-1.5 rounded-full flex items-center gap-2 border border-white/10 hover:bg-white/20 transition-colors">
+                    <span className="text-[10px] md:text-xs font-medium text-pink-300">ROOM</span>
+                    <span className="font-mono text-xs md:text-sm font-bold tracking-wider">{room.roomId}</span>
                     <button onClick={handleCopyRoomId} className="hover:text-pink-400 transition-colors p-1">
-                        <Copy className="w-3.5 h-3.5" />
+                        <Copy className="w-3 h-3 md:w-3.5 md:h-3.5" />
                     </button>
                 </div>
-                <div className="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10">
-                   <Users className="w-3.5 h-3.5 text-purple-300" />
-                   <span className="text-sm">{room.members.length} 人在线</span>
+                <div className="bg-white/10 backdrop-blur-md px-2 md:px-3 py-1 md:py-1.5 rounded-full flex items-center gap-2 border border-white/10 hidden sm:flex">
+                   <Users className="w-3 h-3 md:w-3.5 md:h-3.5 text-purple-300" />
+                   <span className="text-xs md:text-sm">{room.members.length} 人在线</span>
                 </div>
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-1 md:gap-2">
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-white/70 hover:text-white hover:bg-white/10 rounded-full"
+                    className="text-white/70 hover:text-white hover:bg-white/10 rounded-full h-8 w-8 md:h-10 md:w-10"
                     onClick={() => setShowChat(!showChat)}
                 >
-                    <MessageCircle className="w-5 h-5" />
+                    <MessageCircle className="w-4 h-4 md:w-5 md:h-5" />
                 </Button>
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-white/70 hover:text-red-400 hover:bg-white/10 rounded-full"
+                    className="text-white/70 hover:text-red-400 hover:bg-white/10 rounded-full h-8 w-8 md:h-10 md:w-10"
                     onClick={leaveRoom}
                 >
-                    <LogOut className="w-5 h-5" />
+                    <LogOut className="w-4 h-4 md:w-5 md:h-5" />
                 </Button>
             </div>
         </div>
@@ -439,12 +444,12 @@ export function WatchPartyPage() {
         {/* Bottom Controls (Overlay) */}
         {room.videoUrl && (
             <div className={cn(
-                "absolute bottom-0 left-0 right-0 z-20 p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300",
+                "absolute bottom-0 left-0 right-0 z-20 p-3 md:p-6 bg-gradient-to-t from-black/90 via-black/50 to-transparent transition-opacity duration-300",
                 showControls ? "opacity-100" : "opacity-0"
             )} onClick={(e) => e.stopPropagation()}>
                 {/* Progress Bar */}
-                <div className="mb-4 flex items-center gap-3 group/progress">
-                    <span className="text-xs font-mono text-white/70 min-w-[40px]">
+                <div className="mb-2 md:mb-4 flex items-center gap-2 md:gap-3 group/progress">
+                    <span className="text-[10px] md:text-xs font-mono text-white/70 min-w-[32px] md:min-w-[40px]">
                         {formatTime(localCurrentTime)}
                     </span>
                     <div className="relative flex-1 h-6 flex items-center cursor-pointer group/slider">
@@ -463,24 +468,24 @@ export function WatchPartyPage() {
                         />
                          {/* Buffered indication could go here */}
                     </div>
-                    <span className="text-xs font-mono text-white/70 min-w-[40px]">
+                    <span className="text-[10px] md:text-xs font-mono text-white/70 min-w-[32px] md:min-w-[40px]">
                         {formatTime(localDuration || 0)}
                     </span>
                 </div>
 
                 <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-4">
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className={cn("w-10 h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all", !isHost && "opacity-50 cursor-not-allowed")}
+                            className={cn("w-8 h-8 md:w-10 md:h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all", !isHost && "opacity-50 cursor-not-allowed")}
                             onClick={handlePlayPause}
                             disabled={!isHost}
                         >
-                            {room.isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-1" />}
+                            {room.isPlaying ? <Pause className="w-4 h-4 md:w-5 md:h-5 fill-current" /> : <Play className="w-4 h-4 md:w-5 md:h-5 fill-current ml-1" />}
                         </Button>
 
-                        <div className="flex items-center gap-2 group/volume">
+                        <div className="flex items-center gap-1 md:gap-2 group/volume">
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -496,31 +501,31 @@ export function WatchPartyPage() {
                                 step={0.1}
                                 value={isMuted ? 0 : volume}
                                 onChange={handleVolumeChange}
-                                className="w-20 h-1 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white hover:[&::-webkit-slider-thumb]:bg-pink-400"
+                                className="w-16 md:w-20 h-1 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white hover:[&::-webkit-slider-thumb]:bg-pink-400"
                             />
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 md:gap-4">
                         {isHost && (
                             <Button 
                                 variant="ghost" 
                                 size="icon" 
-                                className="w-10 h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all"
+                                className="w-8 h-8 md:w-10 md:h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all"
                                 onClick={handleFileUploadTrigger}
                                 disabled={isUploading}
                                 title="更换视频"
                             >
-                                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-5 h-5" />}
+                                {isUploading ? <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin" /> : <Upload className="w-4 h-4 md:w-5 md:h-5" />}
                             </Button>
                         )}
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="w-10 h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all"
+                            className="w-8 h-8 md:w-10 md:h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all"
                             onClick={toggleFullscreen}
                         >
-                            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                            {isFullscreen ? <Minimize className="w-4 h-4 md:w-5 md:h-5" /> : <Maximize className="w-4 h-4 md:w-5 md:h-5" />}
                         </Button>
                     </div>
                 </div>
@@ -530,8 +535,17 @@ export function WatchPartyPage() {
 
       {/* Chat Sidebar */}
       <div className={cn(
-          "w-80 bg-background/95 backdrop-blur-xl border-l border-border transition-all duration-300 flex flex-col absolute right-0 top-0 bottom-0 z-30 md:relative",
-          !showChat && "translate-x-full md:w-0 md:translate-x-0 md:border-none opacity-0 md:opacity-100"
+          "bg-background/95 backdrop-blur-xl border-border transition-all duration-300 flex flex-col z-30",
+          // Borders
+          "border-t md:border-t-0 md:border-l",
+          
+          // Mobile Logic (default)
+          "w-full",
+          showChat ? "flex-1 opacity-100" : "h-0 opacity-0 overflow-hidden border-none",
+
+          // Desktop Logic (md:)
+          "md:h-full md:relative",
+          showChat ? "md:w-80" : "md:w-0 md:border-none"
       )}>
         {/* Chat Header */}
         <div className="h-16 border-b border-border flex items-center justify-between px-4 bg-background/50">
