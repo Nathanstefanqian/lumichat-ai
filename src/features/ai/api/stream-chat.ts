@@ -12,7 +12,11 @@ export async function streamChat(
   const token = localStorage.getItem('auth-storage');
   const parsed = token ? JSON.parse(token) : null;
   const authToken = parsed?.state?.token;
-  const response = await fetch('/api/ai/chat/stream', {
+
+  const baseUrl = import.meta.env.VITE_API_URL || '/api';
+  const url = `${baseUrl}/ai/chat/stream`;
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
