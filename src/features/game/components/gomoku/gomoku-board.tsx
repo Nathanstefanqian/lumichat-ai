@@ -9,15 +9,15 @@ interface GomokuBoardProps {
 
 export function GomokuBoard({ board, onMove, disabled }: GomokuBoardProps) {
   return (
-    <div className="bg-[#e4c590] p-4 rounded-lg shadow-xl select-none inline-block">
-      <div className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-0 border-2 border-black bg-[#e4c590]">
+    <div className="bg-[#e4c590] p-1 md:p-4 rounded-lg shadow-xl select-none w-full max-w-[min(90vw,600px)] aspect-square mx-auto">
+      <div className="grid grid-cols-[repeat(15,minmax(0,1fr))] gap-0 border-2 border-black bg-[#e4c590] w-full h-full">
         {board.map((row, y) => (
             <React.Fragment key={y}>
                 {row.map((cell, x) => (
                     <div
                         key={`${x}-${y}`}
                         className={cn(
-                            "w-8 h-8 md:w-10 md:h-10 border-[0.5px] border-black/40 flex items-center justify-center cursor-pointer relative",
+                            "w-full aspect-square border-[0.5px] border-black/40 flex items-center justify-center cursor-pointer relative",
                             !disabled && "hover:bg-black/5"
                         )}
                         onClick={() => !disabled && onMove(x, y)}

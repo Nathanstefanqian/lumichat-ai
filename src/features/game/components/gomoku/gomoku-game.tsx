@@ -96,7 +96,7 @@ export function GomokuGame() {
   };
 
   return (
-    <div className="flex flex-col items-center h-full p-4 overflow-y-auto w-full">
+    <div className="flex flex-col items-center h-full p-4 overflow-y-auto w-full [&::-webkit-scrollbar]:hidden [-ms-overflow-style:'none'] [scrollbar-width:'none']">
       <div className="flex justify-between w-full max-w-2xl mb-6 items-center bg-card p-4 rounded-xl border shadow-sm">
         <div>
            <h2 className="text-lg font-bold flex items-center gap-2">
@@ -138,7 +138,7 @@ export function GomokuGame() {
       
       {error && <div className="text-destructive mb-4 bg-destructive/10 p-2 rounded px-4">{error}</div>}
 
-      <div className="relative">
+      <div className="relative w-full flex justify-center">
           <GomokuBoard 
             board={gameState.board} 
             onMove={(x, y) => makeMove(x, y, gameState.roomId)}
@@ -162,7 +162,7 @@ export function GomokuGame() {
           )}
       </div>
       
-      <div className="mt-8 w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="mt-4 md:mt-8 w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-card p-4 rounded-xl border shadow-sm">
               <h3 className="font-semibold mb-3 flex items-center gap-2">
                   <span>玩家</span>

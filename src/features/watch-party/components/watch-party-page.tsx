@@ -536,6 +536,7 @@ export function WatchPartyPage() {
       {/* Chat Sidebar */}
       <div className={cn(
           "bg-background/95 backdrop-blur-xl border-border transition-all duration-300 flex flex-col z-30",
+          "min-h-0", // Fix flex child overflow
           // Borders
           "border-t md:border-t-0 md:border-l",
           
@@ -566,7 +567,7 @@ export function WatchPartyPage() {
         </div>
 
         {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-romantic">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-romantic min-h-0">
             {messages.map((msg, idx) => {
                 const isMe = msg.userId === String(user?.userId);
                 return (
