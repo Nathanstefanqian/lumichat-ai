@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/sidebar';
 import type { TabType } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/stores/auth';
-import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, Grid3X3 } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, Grid3X3, LogOut, Maximize, Minimize } from 'lucide-react';
 import { ChatView } from '@/features/ai/components/chat-view';
 import { UserChatView } from '@/features/chat/components/user-chat-view';
 import { SettingsView } from '@/features/settings/components/settings-view';
@@ -26,10 +27,103 @@ export function Dashboard() {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const doc = document as unknown as {
+        fullscreenElement: Element | null;
+        webkitFullscreenElement?: Element | null;
+        mozFullScreenElement?: Element | null;
+        msFullscreenElement?: Element | null;
+      };
+      
+      const isFull = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      );
+      setIsFullscreen(isFull);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    try {
+      const doc = document as unknown as {
+        fullscreenElement: Element | null;
+        webkitFullscreenElement?: Element | null;
+        mozFullScreenElement?: Element | null;
+        msFullscreenElement?: Element | null;
+        exitFullscreen: () => Promise<void>;
+        webkitExitFullscreen?: () => Promise<void>;
+        mozCancelFullScreen?: () => Promise<void>;
+        msExitFullscreen?: () => Promise<void>;
+      };
+
+      const isFull = !!(
+        doc.fullscreenElement ||
+        doc.webkitFullscreenElement ||
+        doc.mozFullScreenElement ||
+        doc.msFullscreenElement
+      );
+
+      if (!isFull) {
+        const element = document.documentElement as unknown as {
+          requestFullscreen: () => Promise<void>;
+          webkitRequestFullscreen?: () => Promise<void>;
+          mozRequestFullScreen?: () => Promise<void>;
+          msRequestFullscreen?: () => Promise<void>;
+        };
+
+        if (element.requestFullscreen) {
+          await element.requestFullscreen();
+        } else if (element.webkitRequestFullscreen) {
+          await element.webkitRequestFullscreen();
+        } else if (element.mozRequestFullScreen) {
+          await element.mozRequestFullScreen();
+        } else if (element.msRequestFullscreen) {
+          await element.msRequestFullscreen();
+        }
+      } else {
+        if (doc.exitFullscreen) {
+          await doc.exitFullscreen();
+        } else if (doc.webkitExitFullscreen) {
+          await doc.webkitExitFullscreen();
+        } else if (doc.mozCancelFullScreen) {
+          await doc.mozCancelFullScreen();
+        } else if (doc.msExitFullscreen) {
+          await doc.msExitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.error('Fullscreen toggle failed:', err);
+    }
+  };
+
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
+  const logout = useAuthStore((state) => state.logout);
+  const navigate = useNavigate();
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
+  
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
   
   // Socket & Chat Store
   const socketStatus = useSocketStore((state) => state.status);
@@ -275,6 +369,15 @@ export function Dashboard() {
               <span className="font-mono">{currentTime.toLocaleTimeString()}</span>
             </div>
             <div className="hidden md:flex items-center gap-2 rounded-full border theme-border bg-background/60 px-2 py-1 backdrop-blur">
+              <button
+                onClick={toggleFullscreen}
+                className="flex items-center gap-1 rounded-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition"
+                title={isFullscreen ? '退出全屏' : '全屏'}
+              >
+                {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                <span className="sr-only">全屏</span>
+              </button>
+              <div className="w-[1px] h-4 bg-border mx-1" />
               {themeOptions.map((option) => {
                 const Icon = option.icon;
                 const active = theme === option.id;
@@ -309,6 +412,14 @@ export function Dashboard() {
         </header>
 
         {renderContent()}
+
+        {/* Mobile Fullscreen Button */}
+        <button
+          onClick={toggleFullscreen}
+          className="md:hidden fixed top-3 right-16 z-50 p-2 rounded-full bg-background/80 backdrop-blur border theme-border shadow-sm text-foreground hover:bg-muted"
+        >
+          {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+        </button>
 
         {/* Mobile Menu Button */}
         <button
@@ -380,14 +491,21 @@ export function Dashboard() {
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium theme-text truncate">{user?.username || 'Guest'}</p>
-                    <p className="text-xs theme-subtle truncate">{user?.email || 'guest@example.com'}</p>
-                  </div>
+                  <p className="text-sm font-medium theme-text truncate">{user?.username || 'Guest'}</p>
+                  <p className="text-xs theme-subtle truncate">{user?.email || 'guest@example.com'}</p>
                 </div>
               </div>
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-2 mt-4 text-red-500 hover:bg-red-500/10 rounded-lg py-2 transition-colors"
+              >
+                <LogOut className="w-5 h-5" />
+                <span className="font-medium">退出登录</span>
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
       </main>
     </div>
   );

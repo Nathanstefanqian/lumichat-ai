@@ -11,16 +11,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const root = document.documentElement;
     root.classList.remove(
-      'theme-light',
-      'theme-dark',
-      'theme-green',
-      'theme-purple',
+      'light',
       'dark',
+      'green',
+      'purple',
     );
-    root.classList.add(`theme-${theme}`);
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    }
+    root.classList.add(theme);
   }, [theme]);
 
   return (
