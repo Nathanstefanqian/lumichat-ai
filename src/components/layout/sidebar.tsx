@@ -11,13 +11,15 @@ import {
   Gamepad2,
   Video,
   Clapperboard,
-  Grid3X3,
+  Snowflake,
+  FileArchive,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
+import { useUserChatStore } from '@/stores/user-chat';
 import { useNavigate } from 'react-router-dom';
 
-export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings' | 'game' | 'video-task' | 'watch-party' | 'gomoku';
+export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings' | 'game-center' | 'video-task' | 'watch-party' | 'snow-world' | 'media-compressor';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -29,6 +31,7 @@ interface SidebarProps {
 export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: SidebarProps) {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
+  const unreadTotal = useUserChatStore((state) => state.unreadTotal);
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -41,12 +44,13 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
     { id: 'user', icon: Users, label: '用户对话', color: 'text-indigo-500' },
     { id: 'video-task', icon: Video, label: '视频企划', color: 'text-rose-500' },
     { id: 'watch-party', icon: Clapperboard, label: '浪漫放映室', color: 'text-pink-500' },
+    { id: 'media-compressor', icon: FileArchive, label: '媒体压缩', color: 'text-teal-500' },
     { id: 'image', icon: ImageIcon, label: 'AI 图片/视频', color: 'text-purple-500' },
     { id: 'voice', icon: Mic, label: 'AI 语音', color: 'text-green-500' },
-    { id: 'game', icon: Gamepad2, label: '星际战机', color: 'text-orange-500' },
-    { id: 'gomoku', icon: Grid3X3, label: '五子棋', color: 'text-emerald-500' },
+    { id: 'game-center', icon: Gamepad2, label: '游戏中心', color: 'text-orange-500' },
+    { id: 'snow-world', icon: Snowflake, label: '冰雪世界', color: 'text-cyan-500', className: 'hidden md:flex' },
     { id: 'settings', icon: Settings, label: '设置', color: 'text-gray-500' },
-  ] as const;
+  ];
 
   return (
     <div 
@@ -83,19 +87,20 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
       </button>
 
       {/* Navigation */}
-      <div className="flex-1 py-6 px-3 space-y-2 overflow-y-auto overflow-x-hidden">
+      <div className="flex-1 py-6 px-3 space-y-2 overflow-y-auto overflow-x-hidden scrollbar-hidden">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
               key={item.id}
-              onClick={() => onTabChange(item.id)}
+              onClick={() => onTabChange(item.id as TabType)}
               className={cn(
                 "w-full flex items-center p-3 rounded-2xl transition-all duration-200 group relative",
                 isActive 
                   ? "bg-accent shadow-sm" 
                   : "hover:bg-accent/50",
-                !isOpen && "justify-center"
+                !isOpen && "justify-center",
+                item.className
               )}
               title={!isOpen ? item.label : undefined}
             >
@@ -106,12 +111,24 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
                 )} />
               )}
               
-              <item.icon 
-                className={cn(
-                  "w-6 h-6 shrink-0 transition-colors duration-200",
-                  isActive ? item.color : "text-muted-foreground group-hover:text-foreground"
-                )} 
-              />
+              <div className="relative">
+                <item.icon 
+                  className={cn(
+                    "w-6 h-6 shrink-0 transition-colors duration-200",
+                    isActive ? item.color : "text-muted-foreground group-hover:text-foreground"
+                  )} 
+                />
+                
+                {/* Badge for User Conversations */}
+                {item.id === 'user' && unreadTotal > 0 && (
+                  <div className={cn(
+                    "absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center border-2 border-background shadow-sm z-10",
+                    !isOpen && "right-[-4px] top-[-4px]"
+                  )}>
+                    {unreadTotal > 99 ? '99+' : unreadTotal}
+                  </div>
+                )}
+              </div>
               
               <span 
                 className={cn(

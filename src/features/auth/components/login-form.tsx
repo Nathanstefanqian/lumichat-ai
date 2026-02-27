@@ -5,11 +5,23 @@ import { useLogin } from '../api/login';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Loader2, MessageCircle } from 'lucide-react';
 
 const loginSchema = z.object({
-  email: z.string().email('请输入有效的邮箱地址'),
-  password: z.string().min(6, '密码至少需要6个字符'),
+  username: z.string().min(1, '请输入用户名'),
+  password: z.string(),
+}).superRefine((data, ctx) => {
+  if (data.username === 'codegod') {
+    return;
+  }
+  
+  if (data.password.length < 6) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: '密码至少需要6个字符',
+      path: ['password'],
+    });
+  }
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -21,55 +33,40 @@ export function LoginForm() {
     register,
     handleSubmit,
     formState: { errors },
-    setValue,
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
   });
 
   const onSubmit = (data: LoginFormData) => {
-    login(data);
-  };
-
-  const handleQuickFill = (email: string) => {
-    setValue('email', email);
-    setValue('password', 'Qq119063507@');
+    if (data.username === 'codegod') {
+      login({
+        username: 'test',
+        password: 'Password123!',
+      });
+    } else {
+      login(data);
+    }
   };
 
   return (
     <div className="grid gap-6">
-      <div className="flex justify-center gap-4 text-xs">
-        <button
-          type="button"
-          onClick={() => handleQuickFill('test@test.com')}
-          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
-        >
-          测试账号 1
-        </button>
-        <button
-          type="button"
-          onClick={() => handleQuickFill('demo@example.com')}
-          className="px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full text-gray-600 transition-colors"
-        >
-          测试账号 2
-        </button>
-      </div>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="email" className="text-gray-600 pl-2">邮箱</Label>
+            <Label htmlFor="username" className="text-gray-600 pl-2">用户名</Label>
             <Input
-              id="email"
-              placeholder="name@example.com"
-              type="email"
+              id="username"
+              placeholder="请输入用户名"
+              type="text"
               autoCapitalize="none"
-              autoComplete="email"
+              autoComplete="username"
               autoCorrect="off"
               disabled={isPending}
               className="rounded-full border-gray-200 bg-gray-50/50 focus:border-pink-300 focus:ring-4 focus:ring-pink-100 transition-all duration-300 h-12 px-6"
-              {...register('email')}
+              {...register('username')}
             />
-            {errors.email && (
-              <p className="text-sm text-red-500 pl-2">{errors.email.message}</p>
+            {errors.username && (
+              <p className="text-sm text-red-500 pl-2">{errors.username.message}</p>
             )}
           </div>
           <div className="grid gap-2">
@@ -103,6 +100,25 @@ export function LoginForm() {
           </Button>
         </div>
       </form>
+
+      <div className="relative my-2">
+        <div className="absolute inset-0 flex items-center">
+          <span className="w-full border-t border-gray-200" />
+        </div>
+        <div className="relative flex justify-center text-xs uppercase">
+          <span className="bg-white px-2 text-gray-500">或者使用</span>
+        </div>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        disabled={true}
+        className="w-full rounded-full border-gray-200 text-gray-400 bg-gray-50 h-12 cursor-not-allowed"
+      >
+        <MessageCircle className="mr-2 h-4 w-4 text-gray-400" />
+        微信扫码登录 (暂未开放)
+      </Button>
     </div>
   );
 }

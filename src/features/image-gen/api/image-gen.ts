@@ -7,6 +7,13 @@ export interface GenerateImageOptions {
   aigc_watermark?: boolean;
   seed?: number;
   reference_image?: string;
+  style?: {
+    style_type: string;
+    style_weight?: number;
+  };
+  width?: number;
+  height?: number;
+  n?: number;
 }
 
 export interface GeneratedImage {
@@ -38,6 +45,10 @@ export const generateImage = async (
     aigc_watermark: options.aigc_watermark,
     seed: options.seed,
     reference_image: options.reference_image,
+    style: options.style,
+    width: options.width,
+    height: options.height,
+    n: options.n,
   }) as unknown as Promise<{ imageUrl: string }>;
 };
 

@@ -1,11 +1,13 @@
 import { LoginForm } from '../components/login-form';
 import { Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { OceanBackground } from '@/components/ui/ocean-background';
 
 export function LoginPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center theme-page p-4">
-      <div className="w-full max-w-md bg-card/80 text-card-foreground backdrop-blur-md rounded-3xl shadow-xl p-8 border border-border">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <OceanBackground />
+      <div className="w-full max-w-md bg-card/80 text-card-foreground backdrop-blur-md rounded-3xl shadow-xl p-8 border border-border z-10 relative">
         <div className="flex flex-col items-center space-y-4 mb-8">
           <div className="p-3 bg-gradient-to-br from-pink-400 to-purple-500 rounded-2xl shadow-lg transform -rotate-6">
             <Sparkles className="w-8 h-8 text-white" />

@@ -238,12 +238,12 @@ export function WatchPartyPage() {
 
   if (!isConnected) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[50vh] w-full bg-gradient-to-br from-pink-50 to-purple-100 dark:from-pink-950 dark:to-purple-900">
+      <div className="flex items-center justify-center h-full min-h-[50vh] w-full bg-background">
         <div className="text-center space-y-4 px-6">
-          <Sparkles className="w-12 h-12 text-pink-500 mx-auto animate-pulse" />
+          <Sparkles className="w-12 h-12 text-primary mx-auto animate-pulse" />
           <p className="text-muted-foreground font-medium text-lg">
             {error ? (
-                <span className="text-red-500">连接失败: {error}</span>
+                <span className="text-destructive">连接失败: {error}</span>
             ) : (
                 '正在连接到浪漫放映室...'
             )}
@@ -253,7 +253,6 @@ export function WatchPartyPage() {
                 <Button 
                   variant="outline" 
                   onClick={() => window.location.reload()}
-                  className="bg-white/10 hover:bg-white/20"
                 >
                   刷新页面重试
                 </Button>
@@ -269,13 +268,13 @@ export function WatchPartyPage() {
 
   if (!room) {
     return (
-      <div className="flex items-center justify-center h-full min-h-[calc(100vh-4rem)] bg-gradient-to-br from-pink-50 to-purple-100 dark:from-pink-950 dark:to-purple-900 p-4 md:p-6">
-        <div className="max-w-md w-full bg-white/80 dark:bg-black/50 backdrop-blur-xl rounded-3xl shadow-2xl p-6 md:p-8 border border-white/20 mx-auto">
+      <div className="flex items-center justify-center h-full min-h-[calc(100vh-4rem)] bg-background p-4 md:p-6">
+        <div className="max-w-md w-full bg-card/80 backdrop-blur-xl rounded-3xl shadow-2xl p-6 md:p-8 border border-border mx-auto">
           <div className="text-center mb-6 md:mb-8">
-            <div className="w-16 h-16 bg-gradient-to-tr from-pink-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg transform rotate-3">
-              <Film className="w-8 h-8 text-white" />
+            <div className="w-16 h-16 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg transform rotate-3">
+              <Film className="w-8 h-8 text-primary" />
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
+            <h1 className="text-2xl font-bold text-foreground">
               浪漫放映室
             </h1>
             <p className="text-sm text-muted-foreground mt-2">
@@ -285,7 +284,7 @@ export function WatchPartyPage() {
 
           <div className="space-y-6">
             <Button 
-              className="w-full h-12 text-lg bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 shadow-md transition-all hover:scale-[1.02]"
+              className="w-full h-12 text-lg shadow-md transition-all hover:scale-[1.02]"
               onClick={createRoom}
             >
               <Heart className="w-5 h-5 mr-2 fill-current" />
@@ -297,7 +296,7 @@ export function WatchPartyPage() {
                 <span className="w-full border-t border-muted/50" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground rounded-full">或者</span>
+                <span className="bg-card px-2 text-muted-foreground rounded-full">或者</span>
               </div>
             </div>
 
@@ -306,7 +305,7 @@ export function WatchPartyPage() {
                 placeholder="输入房间号加入..." 
                 value={joinId}
                 onChange={(e) => setJoinId(e.target.value.toUpperCase())}
-                className="h-12 text-center text-lg tracking-widest uppercase bg-white/50 dark:bg-black/20"
+                className="h-12 text-center text-lg tracking-widest uppercase bg-background/50"
                 maxLength={6}
               />
               <Button 
@@ -409,14 +408,14 @@ export function WatchPartyPage() {
         )} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-2 md:gap-3">
                 <div className="bg-white/10 backdrop-blur-md px-2 md:px-3 py-1 md:py-1.5 rounded-full flex items-center gap-2 border border-white/10 hover:bg-white/20 transition-colors">
-                    <span className="text-[10px] md:text-xs font-medium text-pink-300">ROOM</span>
+                    <span className="text-[10px] md:text-xs font-medium text-primary">ROOM</span>
                     <span className="font-mono text-xs md:text-sm font-bold tracking-wider">{room.roomId}</span>
-                    <button onClick={handleCopyRoomId} className="hover:text-pink-400 transition-colors p-1">
+                    <button onClick={handleCopyRoomId} className="hover:text-primary transition-colors p-1">
                         <Copy className="w-3 h-3 md:w-3.5 md:h-3.5" />
                     </button>
                 </div>
                 <div className="bg-white/10 backdrop-blur-md px-2 md:px-3 py-1 md:py-1.5 rounded-full flex items-center gap-2 border border-white/10 hidden sm:flex">
-                   <Users className="w-3 h-3 md:w-3.5 md:h-3.5 text-purple-300" />
+                   <Users className="w-3 h-3 md:w-3.5 md:h-3.5 text-primary" />
                    <span className="text-xs md:text-sm">{room.members.length} 人在线</span>
                 </div>
             </div>
@@ -433,7 +432,7 @@ export function WatchPartyPage() {
                 <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-white/70 hover:text-red-400 hover:bg-white/10 rounded-full h-8 w-8 md:h-10 md:w-10"
+                    className="text-white/70 hover:text-destructive hover:bg-white/10 rounded-full h-8 w-8 md:h-10 md:w-10"
                     onClick={leaveRoom}
                 >
                     <LogOut className="w-4 h-4 md:w-5 md:h-5" />
@@ -462,7 +461,7 @@ export function WatchPartyPage() {
                             onChange={handleSeek}
                             disabled={!isHost}
                             className={cn(
-                                "absolute w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-pink-500 [&::-webkit-slider-thumb]:transition-all hover:[&::-webkit-slider-thumb]:scale-125",
+                                "absolute w-full h-1 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:transition-all hover:[&::-webkit-slider-thumb]:scale-125",
                                 !isHost && "cursor-not-allowed opacity-50"
                             )}
                         />
@@ -478,7 +477,7 @@ export function WatchPartyPage() {
                         <Button 
                             variant="ghost" 
                             size="icon" 
-                            className={cn("w-8 h-8 md:w-10 md:h-10 rounded-full hover:bg-white/10 text-white hover:text-pink-400 transition-all", !isHost && "opacity-50 cursor-not-allowed")}
+                            className={cn("w-8 h-8 md:w-10 md:h-10 rounded-full hover:bg-white/10 text-white hover:text-primary transition-all", !isHost && "opacity-50 cursor-not-allowed")}
                             onClick={handlePlayPause}
                             disabled={!isHost}
                         >

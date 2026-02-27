@@ -89,6 +89,9 @@ export function ImageGenView() {
   const [promptOptimizer, setPromptOptimizer] = useState(false);
   const [aigcWatermark, setAigcWatermark] = useState(false);
   const [seed, setSeed] = useState<string>(''); // Keep as string for input, parse to number
+  const [styleType, setStyleType] = useState('漫画');
+  const [styleWeight, setStyleWeight] = useState(0.8);
+  const [numImages, setNumImages] = useState(1);
 
   // Image to Image
   const [mode, setMode] = useState<'text-to-image' | 'image-to-image'>(
@@ -119,6 +122,11 @@ export function ImageGenView() {
         seed: seed ? parseInt(seed, 10) : undefined,
         reference_image:
           mode === 'image-to-image' ? referenceImage || undefined : undefined,
+        style:
+          model === 'image-01-live'
+            ? { style_type: styleType, style_weight: styleWeight }
+            : undefined,
+        n: numImages,
       });
       // api client returns the 'data' field from response structure
       // which contains { imageUrl: string }
@@ -351,10 +359,60 @@ export function ImageGenView() {
                         <SelectValue placeholder="选择模型" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="image-01">Minimax Image-01</SelectItem>
-                        {/* <SelectItem value="image-01-live">Minimax Image-01 Live</SelectItem> */}
+                        <SelectItem value="image-01">Minimax Image-01 (标准)</SelectItem>
+                        <SelectItem value="image-01-live">Minimax Image-01 Live (画风)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {model === 'image-01-live' && (
+                    <div className="space-y-4 p-4 rounded-xl bg-muted/50">
+                      <div className="space-y-2">
+                        <Label>画风选择</Label>
+                        <Select value={styleType} onValueChange={setStyleType}>
+                          <SelectTrigger className="bg-background">
+                            <SelectValue placeholder="选择画风" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="漫画">漫画</SelectItem>
+                            <SelectItem value="元气">元气</SelectItem>
+                            <SelectItem value="中世纪">中世纪</SelectItem>
+                            <SelectItem value="水彩">水彩</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label>画风权重</Label>
+                          <span className="text-xs font-mono text-primary">{styleWeight.toFixed(1)}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="1"
+                          step="0.1"
+                          value={styleWeight}
+                          onChange={(e) => setStyleWeight(parseFloat(e.target.value))}
+                          className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label>生成数量</Label>
+                      <span className="text-xs font-mono text-primary">{numImages} 张</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="1"
+                      max="9"
+                      step="1"
+                      value={numImages}
+                      onChange={(e) => setNumImages(parseInt(e.target.value, 10))}
+                      className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
                   </div>
 
                   <div className="flex items-center justify-between">

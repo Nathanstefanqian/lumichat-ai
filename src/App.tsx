@@ -2,7 +2,9 @@ import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { LoginPage } from './features/auth/routes/login'
 import { RegisterPage } from './features/auth/routes/register'
+import { WechatCallback } from './features/auth/routes/wechat-callback'
 import { Dashboard } from './features/dashboard/routes/dashboard'
+import { WatermelonGame } from './features/game/components/watermelon/watermelon-game'
 import { ProtectedRoute } from './lib/protected-route'
 
 function App() {
@@ -17,9 +19,11 @@ function App() {
       <Routes>
         <Route element={<ProtectedRoute />}>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/game/watermelon" element={<WatermelonGame />} />
         </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/auth/wechat/callback" element={<WechatCallback />} />
       </Routes>
     </div>
   )

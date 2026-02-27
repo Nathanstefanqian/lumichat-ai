@@ -3,13 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/sidebar';
 import type { TabType } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/stores/auth';
-import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, Grid3X3, LogOut, Maximize, Minimize } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, LogOut, Maximize, Minimize, Stars, FileArchive } from 'lucide-react';
 import { ChatView } from '@/features/ai/components/chat-view';
 import { UserChatView } from '@/features/chat/components/user-chat-view';
 import { SettingsView } from '@/features/settings/components/settings-view';
 import { ImageGenView } from '@/features/image-gen/components/image-gen-view';
-import { PlaneShooterGame } from '@/features/game/components/plane-shooter-game';
-import { GomokuGame } from '@/features/game/components/gomoku/gomoku-game';
+import { GameCenter } from '@/features/game/routes/game-center';
 import { VideoPlannerPage } from '@/features/video-task/components/video-planner-page';
 import { WatchPartyPage } from '@/features/watch-party/components/watch-party-page';
 import { useThemeStore } from '@/stores/theme';
@@ -17,6 +16,9 @@ import { useSocketStore } from '@/stores/socket';
 import { useUserChatStore } from '@/stores/user-chat';
 import { fetchUsers, type ChatMessage, type ChatConversation } from '@/features/chat/api/chat';
 import { toast } from 'sonner';
+import { MusicPlayer } from '@/components/ui/music-player';
+import { SnowWorld } from '@/features/snow-world/routes/snow-world';
+import { MediaCompressor } from '@/features/tools/media-compressor';
 
 const ACTIVE_TAB_KEY = 'dashboard-active-tab';
 
@@ -139,6 +141,7 @@ export function Dashboard() {
   const themeOptions = [
     { id: 'light', label: '亮色', icon: Sun },
     { id: 'dark', label: '暗色', icon: Moon },
+    { id: 'night', label: '暗夜', icon: Stars },
     { id: 'green', label: '护眼', icon: Leaf },
     { id: 'purple', label: '浪漫', icon: Heart },
   ] as const;
@@ -291,12 +294,14 @@ export function Dashboard() {
         return <VideoPlannerPage />;
       case 'watch-party':
         return <WatchPartyPage />;
+      case 'media-compressor':
+        return <MediaCompressor />;
       case 'settings':
         return <SettingsView />;
-      case 'game':
-        return <PlaneShooterGame />;
-      case 'gomoku':
-        return <GomokuGame />;
+      case 'game-center':
+        return <GameCenter />;
+      case 'snow-world':
+        return <SnowWorld />;
       case 'image':
         return <ImageGenView />;
       case 'voice':
@@ -350,11 +355,11 @@ export function Dashboard() {
             {activeTab === 'user' && '用户对话'}
             {activeTab === 'video-task' && '视频企划'}
             {activeTab === 'watch-party' && '浪漫放映室'}
+            {activeTab === 'media-compressor' && '媒体压缩'}
             {activeTab === 'image' && '绘图'}
             {activeTab === 'voice' && '语音'}
             {activeTab === 'settings' && '设置'}
-            {activeTab === 'game' && '星际战机'}
-            {activeTab === 'gomoku' && '五子棋'}
+            {activeTab === 'game-center' && '游戏中心'}
           </h1>
           <div className="flex items-center space-x-4">
             <div className="hidden lg:flex items-center gap-3 rounded-full border theme-border bg-background/70 px-3 py-1 text-xs text-muted-foreground">
@@ -453,10 +458,10 @@ export function Dashboard() {
                   { id: 'user', label: '用户', icon: Users },
                   { id: 'video-task', label: '视频企划', icon: Video },
                   { id: 'watch-party', label: '放映室', icon: Clapperboard },
+                  { id: 'media-compressor', label: '媒体压缩', icon: FileArchive },
                   { id: 'image', label: '绘图', icon: ImageIcon },
                   { id: 'voice', label: '语音', icon: Mic },
-                  { id: 'game', label: '星际战机', icon: Gamepad2 },
-                  { id: 'gomoku', label: '五子棋', icon: Grid3X3 },
+                  { id: 'game-center', label: '游戏中心', icon: Gamepad2 },
                   { id: 'settings', label: '设置', icon: Settings },
                 ].map((item) => {
                   const Icon = item.icon;
@@ -507,6 +512,7 @@ export function Dashboard() {
         </div>
       )}
       </main>
+      <MusicPlayer />
     </div>
   );
 }

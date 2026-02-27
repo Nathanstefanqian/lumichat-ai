@@ -15,6 +15,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       'dark',
       'green',
       'purple',
+      'warm',
+      'night',
     );
     root.classList.add(theme);
   }, [theme]);

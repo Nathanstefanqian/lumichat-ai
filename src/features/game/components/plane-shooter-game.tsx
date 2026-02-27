@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Play, RotateCcw, Trophy } from 'lucide-react';
+import { Play, RotateCcw, Trophy, Save, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface GameObject {
   x: number;
@@ -517,6 +518,57 @@ export function PlaneShooterGame() {
     gameStatusRef.current = 'playing';
   };
 
+  const saveGame = () => {
+    if (gameStatusRef.current !== 'playing') {
+        toast.error('请在游戏中保存');
+        return;
+    }
+    const data = {
+      score: stateRef.current.score,
+      level: stateRef.current.level,
+      wallHp: stateRef.current.wallHp,
+      player: stateRef.current.player,
+      enemies: stateRef.current.enemies,
+      bullets: stateRef.current.bullets
+    };
+    localStorage.setItem('plane-shooter-save', JSON.stringify(data));
+    toast.success('游戏进度已保存');
+  };
+
+  const loadGame = () => {
+    const saved = localStorage.getItem('plane-shooter-save');
+    if (!saved) {
+        toast.error('没有找到存档');
+        return;
+    }
+    try {
+        const data = JSON.parse(saved);
+        
+        stateRef.current = {
+            ...stateRef.current,
+            score: data.score,
+            level: data.level,
+            wallHp: data.wallHp,
+            player: { ...stateRef.current.player, ...data.player },
+            enemies: data.enemies,
+            bullets: data.bullets,
+            particles: [],
+            lastShot: 0,
+            lastEnemySpawn: 0,
+        };
+        
+        setScore(data.score);
+        setLevel(data.level);
+        setWallHp(data.wallHp);
+        setGameState('playing');
+        gameStatusRef.current = 'playing';
+        toast.success('游戏进度已读取');
+    } catch (e) {
+        toast.error('存档读取失败');
+        console.error(e);
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-zinc-900 overflow-hidden">
       <canvas
@@ -525,10 +577,21 @@ export function PlaneShooterGame() {
       />
       
       {/* UI Overlay */}
-      <div className="absolute top-4 left-4 text-white font-mono text-xl select-none pointer-events-none z-20 flex flex-col gap-1">
-        <div>SCORE: {score}</div>
-        <div className="text-sm text-yellow-400">LEVEL: {level}</div>
-        <div className="text-sm text-green-400">WALL: {wallHp}%</div>
+      <div className="absolute top-16 left-4 z-20 flex flex-col gap-1">
+        <div className="text-white font-mono text-xl select-none pointer-events-none">
+            <div>SCORE: {score}</div>
+            <div className="text-sm text-yellow-400">LEVEL: {level}</div>
+            <div className="text-sm text-green-400">WALL: {wallHp}%</div>
+        </div>
+        
+        <div className="flex gap-2 mt-2 pointer-events-auto">
+            <button onClick={saveGame} className="p-2 bg-blue-600/50 hover:bg-blue-600 text-white rounded-full transition-colors" title="保存进度">
+                <Save className="w-4 h-4" />
+            </button>
+            <button onClick={loadGame} className="p-2 bg-green-600/50 hover:bg-green-600 text-white rounded-full transition-colors" title="读取进度">
+                <Upload className="w-4 h-4" />
+            </button>
+        </div>
       </div>
       <div className="absolute top-4 right-4 text-white font-mono text-xl select-none pointer-events-none z-20 flex items-center gap-2">
         <Trophy className="w-5 h-5 text-yellow-500" />

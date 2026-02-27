@@ -7,6 +7,12 @@ export interface ChatConversation {
   title: string;
   lastMessagePreview: string;
   lastMessageAt: string | null;
+  participantInfo?: {
+    id: number;
+    username: string;
+    avatar?: string;
+  };
+  unreadCount?: number;
 }
 
 export interface ChatMessage {
@@ -16,6 +22,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   createdAt: string;
+  type?: 'text' | 'image' | 'audio';
+  fileUrl?: string;
+  isRead?: boolean;
+  readAt?: string;
 }
 
 export interface FriendRequest {
@@ -52,20 +62,53 @@ export const fetchMessages = (conversationId: string) => {
     .then((res) => res as unknown as ChatMessage[]);
 };
 
-export const sendMessage = (conversationId: string, content: string) => {
+export const sendMessage = (
+  conversationId: string, 
+  content: string, 
+  type: 'text' | 'image' | 'audio' = 'text',
+  fileUrl?: string
+) => {
   return api
     .post(`/chat/conversations/${conversationId}/messages`, {
       content,
+      type,
+      fileUrl,
     })
     .then((res) => res as unknown as ChatMessage);
 };
 
-export const fetchUsers = () => {
+export const deleteMessage = (messageId: string) => {
+  return api.post(`/chat/messages/${messageId}/delete`).then((res) => res as unknown as { success: boolean });
+};
+
+export const deleteConversation = (conversationId: string) => {
+  return api.post(`/chat/conversations/${conversationId}/delete`).then((res) => res as unknown as { success: boolean });
+};
+
+export const markAsRead = (conversationId: string) => {
+  return api.post(`/chat/conversations/${conversationId}/read`).then((res) => res as unknown as { success: boolean });
+};
+
+export const uploadFile = (file: File) => {
+  const formData = new FormData();
+  formData.append('file', file);
   return api
-    .get('/users')
+    .post('/common/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+    .then((res) => res as unknown as { url: string });
+};
+
+export const fetchUsers = (username?: string) => {
+  return api
+    .get('/users', {
+      params: username ? { username } : undefined,
+    })
     .then(
       (res) =>
-        res as unknown as { id: number; username: string; email: string }[],
+        res as unknown as { id: number; username: string; email: string; lastSeen?: string }[],
     );
 };
 

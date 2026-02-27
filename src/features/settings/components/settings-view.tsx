@@ -1,13 +1,15 @@
 import { useThemeStore } from '@/stores/theme';
 import { useAuthStore } from '@/stores/auth';
-import { Sun, Moon, Leaf, Heart, Monitor, Settings as SettingsIcon, User, Save, Loader2 } from 'lucide-react';
+import { Sun, Moon, Leaf, Heart, Coffee, Monitor, Settings as SettingsIcon, User, Save, Loader2, Stars } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AvatarUpload } from './avatar-upload';
 import { useState } from 'react';
 import { updateProfile } from '@/features/auth/api/update-profile';
+import { changePassword } from '@/features/auth/api/change-password';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Lock } from 'lucide-react';
 
 export function SettingsView() {
   const theme = useThemeStore((state) => state.theme);
@@ -18,8 +20,16 @@ export function SettingsView() {
     username: user?.username || '',
     email: user?.email || '',
   });
+  const [passwordData, setPasswordData] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  
   const [loading, setLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,24 +37,55 @@ export function SettingsView() {
     setMessage(null);
 
     try {
-      const updatedUser = await updateProfile(formData);
-      setUser(updatedUser);
+      await updateProfile(formData);
+      setUser({ ...user!, ...formData });
       setMessage({ type: 'success', text: '个人信息更新成功' });
     } catch (error) {
+      const err = error as { response?: { data?: { message?: string } } };
       setMessage({ 
         type: 'error', 
-        text: (error as Error).message || '更新失败，请重试' 
+        text: err.response?.data?.message || (error as Error).message || '更新失败，请重试' 
       });
     } finally {
       setLoading(false);
     }
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordMessage({ type: 'error', text: '两次输入的密码不一致' });
+      return;
+    }
+    
+    setPasswordLoading(true);
+    setPasswordMessage(null);
+
+    try {
+      await changePassword({
+        oldPassword: passwordData.oldPassword,
+        newPassword: passwordData.newPassword,
+      });
+      setPasswordMessage({ type: 'success', text: '密码修改成功' });
+      setPasswordData({ oldPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) {
+      const err = error as { response?: { data?: { message?: string } } };
+      setPasswordMessage({ 
+        type: 'error', 
+        text: err.response?.data?.message || (error as Error).message || '修改失败，请重试' 
+      });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   const themeOptions = [
     { id: 'light', label: '亮色', icon: Sun, description: '清晰明亮的经典界面' },
     { id: 'dark', label: '暗色', icon: Moon, description: '适合夜间使用的深色界面' },
+    { id: 'night', label: '暗夜', icon: Stars, description: '更深邃的夜间模式' },
     { id: 'green', label: '护眼', icon: Leaf, description: '柔和舒适的绿色调' },
     { id: 'purple', label: '浪漫', icon: Heart, description: '富有情调的紫色调' },
+    { id: 'warm', label: '暖阳', icon: Coffee, description: '温暖惬意的日落色调' },
   ] as const;
 
   return (
@@ -114,6 +155,72 @@ export function SettingsView() {
                   {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                   <Save className="w-4 h-4 mr-2" />
                   保存修改
+                </Button>
+              </div>
+            </form>
+          </div>
+
+          <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
+            <div className="flex items-center space-x-3 mb-6">
+              <Lock className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-semibold">修改密码</h3>
+            </div>
+            
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="oldPassword">旧密码</Label>
+                  <Input
+                    id="oldPassword"
+                    type="password"
+                    value={passwordData.oldPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, oldPassword: e.target.value })}
+                    placeholder="请输入旧密码"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword">新密码</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                    placeholder="请输入新密码"
+                    minLength={6}
+                    maxLength={20}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">确认新密码</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                    placeholder="请再次输入新密码"
+                    minLength={6}
+                    maxLength={20}
+                    required
+                  />
+                </div>
+              </div>
+
+              {passwordMessage && (
+                <div className={cn(
+                  "p-3 rounded-md text-sm",
+                  passwordMessage.type === 'success' ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                )}>
+                  {passwordMessage.text}
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={passwordLoading}>
+                  {passwordLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                  <Save className="w-4 h-4 mr-2" />
+                  修改密码
                 </Button>
               </div>
             </form>

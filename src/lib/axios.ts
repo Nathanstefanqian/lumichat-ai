@@ -27,7 +27,12 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       useAuthStore.getState().logout();
     }
-    return Promise.reject(error);
+    // Extract error message from backend response if available
+    const message = error.response?.data?.message || error.message || 'Unknown error';
+    // If message is array (e.g. NestJS validation errors), join them
+    const finalMessage = Array.isArray(message) ? message.join(', ') : message;
+    
+    return Promise.reject(new Error(finalMessage));
   }
 );
 

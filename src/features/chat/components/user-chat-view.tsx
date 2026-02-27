@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Send, User, Users, ChevronLeft, Trash2 } from 'lucide-react';
+import { Send, User, Users, ChevronLeft, Trash2, Image as ImageIcon, Mic, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useSocketStore } from '@/stores/socket';
@@ -16,6 +16,10 @@ import {
   acceptFriendRequest,
   rejectFriendRequest,
   deleteFriend,
+  uploadFile,
+  deleteMessage,
+  deleteConversation,
+  markAsRead,
   type ChatConversation,
   type ChatMessage,
   type FriendRequest,
@@ -26,7 +30,9 @@ interface UserItem {
   id: number;
   username: string;
   email: string;
+  avatar?: string;
   isOnline?: boolean;
+  lastSeen?: string;
 }
 
 // 格式化时间函数
@@ -35,6 +41,12 @@ const formatChatTime = (dateStr?: string | number) => {
   const date = new Date(dateStr);
   const now = new Date();
   
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  // If very recent (less than 1 min), show "Just now"
+  if (diffMins < 1) return '刚刚';
+
   const isToday = date.getDate() === now.getDate() && 
                  date.getMonth() === now.getMonth() && 
                  date.getFullYear() === now.getFullYear();
@@ -45,24 +57,17 @@ const formatChatTime = (dateStr?: string | number) => {
                       date.getMonth() === yesterday.getMonth() && 
                       date.getFullYear() === yesterday.getFullYear();
 
-  const beforeYesterday = new Date(now);
-  beforeYesterday.setDate(now.getDate() - 2);
-  const isBeforeYesterday = date.getDate() === beforeYesterday.getDate() && 
-                            date.getMonth() === beforeYesterday.getMonth() && 
-                            date.getFullYear() === beforeYesterday.getFullYear();
-
   if (isToday) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   }
   if (isYesterday) {
-    return '昨天';
-  }
-  if (isBeforeYesterday) {
-    return '前天';
+    return `昨天 ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
   }
   
-  return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+  return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}`;
 };
+
+import { AddFriendDialog } from './add-friend-dialog';
 
 export function UserChatView() {
   const currentUser = useAuthStore((state) => state.user);
@@ -82,12 +87,207 @@ export function UserChatView() {
   const activeConversationRef = useRef<string | null>(null);
   const setSocketLastEvent = useSocketStore((state) => state.setLastEvent);
   const socket = useSocketStore((state) => state.socket);
-  const { activeConversationId, setActiveConversationId } = useUserChatStore();
+  const { activeConversationId, setActiveConversationId, setUnreadTotal } = useUserChatStore();
+
+  useEffect(() => {
+    const total = conversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0);
+    setUnreadTotal(total);
+  }, [conversations, setUnreadTotal]);
+  
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleImageClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleSendMedia = async (type: 'image' | 'audio', fileUrl: string, previewText: string) => {
+     if (!activeConversation) return;
+
+     const socket = socketRef.current;
+     if (socket?.connected) {
+       const localId = `local-${Date.now()}`;
+       const tempMsg: ChatMessage = {
+          _id: localId,
+          conversationId: activeConversation._id,
+          senderId: currentUser?.userId || null,
+          role: 'user',
+          content: previewText,
+          type,
+          fileUrl,
+          createdAt: new Date().toISOString(),
+       };
+
+       setMessages((prev) => [...prev, tempMsg]);
+
+       socket.emit(
+        'chat:send',
+        { conversationId: activeConversation._id, content: previewText, type, fileUrl },
+        (response: { ok: boolean; message?: ChatMessage }) => {
+          if (response?.message) {
+            setMessages((prev) =>
+              prev.map((item) =>
+                item._id === localId ? (response.message as ChatMessage) : item,
+              ),
+            );
+          }
+        },
+      );
+      return;
+     }
+     
+     // Fallback to HTTP
+     const message = await sendMessage(activeConversation._id, previewText, type, fileUrl);
+     setMessages((prev) => [...prev, message]);
+      setConversations((prev) =>
+      prev.map((conv) =>
+        conv._id === activeConversation._id
+          ? {
+              ...conv,
+              lastMessagePreview: previewText,
+              lastMessageAt: new Date().toISOString(),
+            }
+          : conv,
+      ),
+    );
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const { url } = await uploadFile(file);
+      await handleSendMedia('image', url, '[图片]');
+    } catch (error) {
+      console.error('Failed to upload image:', error);
+      alert('图片上传失败');
+    }
+    // Clear input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleStartRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // 动态检测浏览器支持的音频格式
+      const mimeTypes = ['audio/mp4', 'audio/aac', 'audio/webm', 'audio/wav'];
+      const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || '';
+      
+      const options = mimeType ? { mimeType } : {};
+      const mediaRecorder = new MediaRecorder(stream, options);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // 强制使用 audio/mpeg (MP3) 进行文件封装发送
+        const finalMimeType = 'audio/mpeg';
+        const audioBlob = new Blob(audioChunksRef.current, { type: finalMimeType });
+        const file = new File([audioBlob], 'voice.mp3', { type: finalMimeType });
+        
+        try {
+          const { url } = await uploadFile(file);
+          await handleSendMedia('audio', url, '[语音]');
+        } catch (error) {
+          console.error('Failed to upload voice:', error);
+          alert('语音发送失败');
+        }
+        
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      alert('无法访问麦克风');
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+  };
+
+  const handleCancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      // Just stop without processing
+      mediaRecorderRef.current.onstop = null; // Remove handler
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+      setIsRecording(false);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+  };
+
+  const handleDeleteMessageItem = async (messageId: string) => {
+      if (!window.confirm('确定要删除这条消息吗？')) return;
+      
+      try {
+          await deleteMessage(messageId);
+          setMessages(prev => prev.filter(m => m._id !== messageId));
+      } catch (error) {
+          console.error('Failed to delete message:', error);
+          alert('删除失败');
+      }
+  };
+
+  const handleDeleteConversationItem = async (conversationId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!window.confirm('确定要删除这个对话吗？')) return;
+
+      try {
+          await deleteConversation(conversationId);
+          setConversations(prev => prev.filter(c => c._id !== conversationId));
+          if (activeConversation?._id === conversationId) {
+              setActiveConversation(null);
+          }
+      } catch (error) {
+          console.error('Failed to delete conversation:', error);
+          alert('删除失败');
+      }
+  };
 
   const selectConversation = async (conversation: ChatConversation) => {
     setActiveConversation(conversation);
     const list = await fetchMessages(conversation._id);
     setMessages(list);
+    
+    // Clear unread count locally
+    setConversations(prev => prev.map(c => 
+      c._id === conversation._id ? { ...c, unreadCount: 0 } : c
+    ));
+
+    // 标记为已读
+    try {
+      await markAsRead(conversation._id);
+    } catch (error) {
+      console.error('Failed to mark as read:', error);
+    }
   };
 
   useEffect(() => {
@@ -136,6 +336,9 @@ export function UserChatView() {
       setSocketLastEvent('chat:message');
       setConversations((prev) => {
         const exists = prev.find((conv) => conv._id === payload.conversationId);
+        const isActive = activeConversationRef.current === payload.conversationId;
+        const isFromOther = String(payload.message.senderId) !== String(currentUser?.userId);
+
         if (exists) {
           return prev.map((conv) =>
             conv._id === payload.conversationId
@@ -143,6 +346,7 @@ export function UserChatView() {
                   ...conv,
                   lastMessagePreview: payload.message.content.slice(0, 100),
                   lastMessageAt: payload.message.createdAt,
+                  unreadCount: (conv.unreadCount || 0) + (isFromOther && !isActive ? 1 : 0),
                 }
               : conv,
           );
@@ -152,6 +356,7 @@ export function UserChatView() {
             ...payload.conversation,
             lastMessagePreview: payload.message.content.slice(0, 100),
             lastMessageAt: payload.message.createdAt,
+            unreadCount: isFromOther && !isActive ? 1 : 0,
           },
           ...prev,
         ];
@@ -176,6 +381,11 @@ export function UserChatView() {
           }
           return [...prev, payload.message];
         });
+
+        // 如果是当前正在进行的对话，收到消息后立即标记为已读
+        if (payload.message.conversationId === activeConversationRef.current) {
+          markAsRead(payload.message.conversationId).catch(console.error);
+        }
       }
     };
 
@@ -433,7 +643,7 @@ export function UserChatView() {
                 </div>
                 <div className="mt-3 space-y-2 max-h-[160px] overflow-y-auto scrollbar-hidden pr-1">
                   {incomingRequests.length === 0 ? (
-                    <div className="text-xs text-muted-foreground">暂无请求</div>
+                    <div className="text-xs text-muted-foreground text-center py-2">暂无请求</div>
                   ) : (
                     incomingRequests.map((request) => {
                       const requester = users.find(
@@ -468,100 +678,76 @@ export function UserChatView() {
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Users className="w-4 h-4" />
-                  好友列表
+              <div className="flex flex-col min-h-0">
+                <div className="flex items-center justify-between gap-2 text-sm font-semibold text-foreground">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    好友列表
+                  </div>
+                  <AddFriendDialog 
+                    friends={friends} 
+                    outgoingRequests={outgoingRequests} 
+                    onAddFriend={handleSendFriendRequest}
+                  />
                 </div>
                 <div className="mt-3 space-y-2 max-h-[160px] overflow-y-auto scrollbar-hidden pr-1">
                   {friends.length === 0 ? (
-                    <div className="text-xs text-muted-foreground">暂无好友</div>
+                    <div className="text-xs text-muted-foreground text-center py-2">暂无好友</div>
                   ) : (
                     friends.map((item) => (
-                      <button
+                      <div
                         key={item.id}
-                        onClick={() => handleSelectUser(item.id)}
-                        className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"
+                        className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm hover:bg-muted group"
                       >
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center relative">
-                            <User className="w-4 h-4 text-muted-foreground" />
+                        <button
+                          onClick={() => handleSelectUser(item.id)}
+                          className="flex-1 flex items-center gap-2 min-w-0"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center relative shrink-0 overflow-hidden">
+                            {item.avatar ? (
+                              <img src={item.avatar} alt={item.username} className="w-full h-full object-cover" />
+                            ) : (
+                              <User className="w-4 h-4 text-muted-foreground" />
+                            )}
                             {onlineUserIds.has(item.id) && (
                               <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full"></span>
                             )}
                           </div>
-                        <div className="truncate">
-                          <div className="text-foreground">{item.username}</div>
-                          <div className="text-xs text-muted-foreground truncate">
-                            {item.email}
+                          <div className="truncate text-left">
+                            <div className="text-foreground truncate flex items-center gap-2">
+                                {item.username}
+                                {!onlineUserIds.has(item.id) && item.lastSeen && (
+                                    <span className="text-[10px] text-muted-foreground font-normal">
+                                        {formatChatTime(item.lastSeen)}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="text-xs text-muted-foreground truncate">
+                              {item.email}
+                            </div>
                           </div>
-                        </div>
-                      </button>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteFriend(item.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-background text-muted-foreground hover:text-destructive transition-all ml-2"
+                          title="删除好友"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     ))
                   )}
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Users className="w-4 h-4" />
-                  用户列表
-                </div>
-                <div className="mt-3 space-y-2 max-h-[200px] overflow-y-auto scrollbar-hidden pr-1">
-                  {users.map((item) => {
-                    const isFriend = friends.some((friend) => friend.id === item.id);
-                    const pendingOutgoing = outgoingRequests.some(
-                      (req) => req.addresseeId === item.id,
-                    );
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm hover:bg-muted"
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                            <User className="w-4 h-4 text-muted-foreground" />
-                          </div>
-                          <div className="truncate">
-                            <div className="text-foreground">{item.username}</div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {item.email}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="shrink-0 ml-2">
-                          {isFriend ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-green-600 whitespace-nowrap">已添加</span>
-                              <button
-                                onClick={() => handleDeleteFriend(item.id)}
-                                className="text-muted-foreground hover:text-destructive p-1 rounded-full hover:bg-muted-foreground/10 transition-colors"
-                                title="删除好友"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          ) : pendingOutgoing ? (
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">待确认</span>
-                          ) : (
-                            <button
-                              onClick={() => handleSendFriendRequest(item.id)}
-                              className="text-xs text-blue-600 hover:text-blue-700 whitespace-nowrap"
-                            >
-                              添加
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div>
+              <div className="flex flex-col flex-1 min-h-0">
                 <div className="text-sm font-semibold text-foreground">
                   最近对话
                 </div>
-                <div className="mt-3 space-y-2 max-h-[160px] overflow-y-auto scrollbar-hidden pr-1">
+                <div className="mt-3 space-y-2 flex-1 overflow-y-auto scrollbar-hidden pr-1">
                   {conversations.map((conv) => {
                     // Find other participant
                     const otherId = conv.participants.find(
@@ -573,25 +759,35 @@ export function UserChatView() {
                     const lastMessageTime = conv.lastMessageAt ? formatChatTime(conv.lastMessageAt) : '';
 
                     return (
-                      <button
+                      <div
                         key={conv._id}
-                        onClick={() => selectConversation(conv)}
                         className={cn(
-                          'w-full text-left rounded-xl p-3 transition flex items-center gap-3',
+                          'w-full text-left rounded-xl p-3 transition flex items-center gap-3 group relative cursor-pointer',
                           conv._id === activeConversation?._id
                             ? 'bg-blue-50'
                             : 'hover:bg-muted',
                         )}
+                        onClick={() => selectConversation(conv)}
                       >
                         {/* Avatar */}
                         <div className="shrink-0 relative">
                           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-cyan-400 p-[1px]">
                             <div className="w-full h-full rounded-[7px] bg-background flex items-center justify-center overflow-hidden">
-                              <span className="text-sm font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-500 to-cyan-500">
-                                {avatarChar}
-                              </span>
+                              {conv.participantInfo?.avatar ? (
+                                <img src={conv.participantInfo.avatar} alt={displayName} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-sm font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-500 to-cyan-500">
+                                  {avatarChar}
+                                </span>
+                              )}
                             </div>
                           </div>
+                          {/* Unread Badge */}
+                          {conv.unreadCount !== undefined && conv.unreadCount > 0 && (
+                            <div className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-background shadow-sm z-10">
+                              {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                            </div>
+                          )}
                         </div>
 
                         {/* Content */}
@@ -614,7 +810,15 @@ export function UserChatView() {
                             {conv.lastMessagePreview || '开始新的对话'}
                           </div>
                         </div>
-                      </button>
+
+                        <button
+                          onClick={(e) => handleDeleteConversationItem(conv._id, e)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded-md bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-all shadow-sm"
+                          title="删除对话"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -680,21 +884,52 @@ export function UserChatView() {
                         )}
                         <div
                           className={cn(
-                            'flex items-start gap-3',
+                            'flex items-start gap-2 group',
                             String(message.senderId) === String(currentUser?.userId) ? 'justify-end' : 'justify-start',
                           )}
                         >
+                          {/* Delete Button (Left side for user messages) */}
+                          {String(message.senderId) === String(currentUser?.userId) && (
+                              <button 
+                                  onClick={() => handleDeleteMessageItem(message._id)}
+                                  className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive transition-opacity self-center"
+                                  title="撤回消息"
+                              >
+                                  <Trash2 className="w-4 h-4" />
+                              </button>
+                          )}
+
                           <div
                             className={cn(
-                              'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
+                              'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed overflow-hidden',
                               String(message.senderId) === String(currentUser?.userId)
                                 ? 'bg-blue-600 text-white rounded-br-md'
                                 : 'bg-gray-50 text-gray-700 rounded-bl-md',
                             )}
                           >
-                            <span className="whitespace-pre-wrap">{message.content}</span>
+                            {message.type === 'image' && message.fileUrl ? (
+                                <img src={message.fileUrl} alt="Image" className="max-w-[200px] md:max-w-[300px] h-auto rounded-lg object-contain" />
+                            ) : message.type === 'audio' && message.fileUrl ? (
+                                <audio controls src={message.fileUrl} className="max-w-[200px] md:max-w-[240px] h-8" />
+                            ) : (
+                                <span className="whitespace-pre-wrap break-words">{message.content}</span>
+                            )}
                           </div>
                         </div>
+                        {/* Read status - Only show for the last message from current user */}
+                        {String(message.senderId) === String(currentUser?.userId) && index === messages.length - 1 && (
+                          <div className="flex justify-end pr-2 -mt-3 mb-4">
+                            <span className="text-[10px] text-muted-foreground">
+                              {message.isRead ? (
+                                <span className="text-blue-500">
+                                  已读 {message.readAt ? new Date(message.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                                </span>
+                              ) : (
+                                '未读'
+                              )}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -715,29 +950,70 @@ export function UserChatView() {
 
                 return (
                   <div className="flex-none border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card z-10">
-                    <div className="flex items-end gap-3">
-                      <textarea
-                        value={input}
-                        onChange={(event) => setInput(event.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="输入消息..."
-                        className="flex-1 resize-none rounded-2xl border border-input bg-background px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
-                        rows={2}
-                        disabled={!activeConversation}
-                      />
-                      <button
-                        onClick={handleSend}
-                        disabled={!canSend || !activeConversation}
-                        className={cn(
-                          'h-12 w-12 rounded-2xl flex items-center justify-center transition',
-                          canSend && activeConversation
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed',
-                        )}
-                      >
-                        <Send className="w-5 h-5" />
-                      </button>
-                    </div>
+                    <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        ref={fileInputRef} 
+                        onChange={handleFileChange} 
+                    />
+
+                    {isRecording ? (
+                        <div className="flex items-center gap-3 h-12 bg-red-50 rounded-2xl px-4 animate-in fade-in">
+                            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
+                            <span className="flex-1 font-mono text-red-600 font-medium">
+                                {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+                            </span>
+                            <button onClick={handleCancelRecording} className="p-2 text-muted-foreground hover:text-foreground" title="取消">
+                                <X className="w-5 h-5" />
+                            </button>
+                            <button onClick={handleStopRecording} className="p-2 text-red-600 bg-red-100 rounded-full hover:bg-red-200" title="发送">
+                                <Send className="w-5 h-5" />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-end gap-2">
+                          <button 
+                            onClick={handleImageClick}
+                            className="p-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors shrink-0"
+                            title="发送图片"
+                            disabled={!activeConversation}
+                          >
+                            <ImageIcon className="w-5 h-5" />
+                          </button>
+                          <button 
+                            onClick={handleStartRecording}
+                            className="p-3 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl transition-colors shrink-0"
+                            title="发送语音"
+                            disabled={!activeConversation}
+                          >
+                            <Mic className="w-5 h-5" />
+                          </button>
+
+                          <textarea
+                            value={input}
+                            onChange={(event) => setInput(event.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder="输入消息..."
+                            className="flex-1 resize-none rounded-2xl border border-input bg-background px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring scrollbar-hidden"
+                            rows={1}
+                            style={{ minHeight: '48px', maxHeight: '120px' }}
+                            disabled={!activeConversation}
+                          />
+                          <button
+                            onClick={handleSend}
+                            disabled={!canSend || !activeConversation}
+                            className={cn(
+                              'h-12 w-12 rounded-2xl flex items-center justify-center transition shrink-0',
+                              canSend && activeConversation
+                                ? 'bg-primary text-primary-foreground shadow-md hover:shadow-lg'
+                                : 'bg-muted text-muted-foreground cursor-not-allowed',
+                            )}
+                          >
+                            <Send className="w-5 h-5" />
+                          </button>
+                        </div>
+                    )}
                   </div>
                 );
               })()}

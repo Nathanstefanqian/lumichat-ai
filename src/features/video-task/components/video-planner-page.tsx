@@ -185,22 +185,24 @@ export function VideoPlannerPage() {
             <div className="w-px h-6 bg-border mx-2 hidden md:block"></div>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setIsAutoGenerateOpen(true)}
-              className="gap-2 whitespace-nowrap"
+              className="gap-1.5 whitespace-nowrap h-8 px-3 text-xs md:h-9 md:px-4 md:text-sm"
             >
-              <Sparkles className="w-4 h-4" />
+              <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4" />
               AI 生成
             </Button>
-            <button
+            <Button
               onClick={() => {
                 setDefaultArtist(undefined);
                 setIsModalOpen(true);
               }}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors whitespace-nowrap ml-auto md:ml-0"
+              size="sm"
+              className="gap-1.5 whitespace-nowrap ml-auto md:ml-0 h-8 px-3 text-xs md:h-9 md:px-4 md:text-sm"
             >
-              <Plus className="w-4 h-4" />
+              <Plus className="w-3.5 h-3.5 md:w-4 md:h-4" />
               新建企划
-            </button>
+            </Button>
           </div>
         )}
       </div>
