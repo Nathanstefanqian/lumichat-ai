@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import { Music, Settings, Disc, Minimize2 } from 'lucide-react';
+import { Music, Settings, Disc, Minimize2, Play, Pause, SkipForward, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import { MusicParticleLoader } from '@/components/ui/particle-loader';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const getAPlayer = (element: any) => (element as any)?.aplayer;
+
 export function MusicPlayer() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true);
   // 默认网易云热歌榜
   const DEFAULT_PLAYLIST_ID = '3778678';
   const [playlistId, setPlaylistId] = useState(() => localStorage.getItem('music-playlist-id') || DEFAULT_PLAYLIST_ID);
@@ -16,15 +20,19 @@ export function MusicPlayer() {
   const [isLoading, setIsLoading] = useState(false);
   const hasLoadedOnce = useRef(false);
   
-  // Load external scripts
+  // 迷你控制器状态
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSong, setCurrentSong] = useState<{ title: string; author: string; pic: string } | null>(null);
+  const aplayerRef = useRef<any>(null);
 
+  // Load external scripts
   useEffect(() => {
     const loadScript = (src: string) => {
       if (document.querySelector(`script[src="${src}"]`)) return Promise.resolve();
-      return new Promise((resolve, reject) => {
+      return new Promise<void>((resolve, reject) => {
         const script = document.createElement('script');
         script.src = src;
-        script.onload = resolve;
+        script.onload = () => resolve();
         script.onerror = reject;
         document.head.appendChild(script);
       });
@@ -43,8 +51,60 @@ export function MusicPlayer() {
     // Load APlayer first, then Meting
     loadScript('https://cdn.jsdelivr.net/npm/aplayer/dist/APlayer.min.js')
       .then(() => loadScript('https://cdn.jsdelivr.net/npm/meting@2/dist/Meting.min.js'))
+      .then(() => {
+        // 定期检查 APlayer 实例并绑定事件
+        const checkTimer = setInterval(() => {
+          const metingElement = document.querySelector('meting-js') as (HTMLElement & { aplayer?: unknown });
+          const ap = getAPlayer(metingElement);
+          if (ap) {
+            aplayerRef.current = ap;
+            
+            // 绑定事件同步状态
+            ap.on('play', () => setIsPlaying(true));
+            ap.on('pause', () => setIsPlaying(false));
+            ap.on('listswitch', () => {
+              const song = ap.list.audios[ap.list.index];
+              if (song) {
+                setCurrentSong({
+                  title: song.title,
+                  author: song.author,
+                  pic: song.pic
+                });
+              }
+            });
+            
+            // 初始化当前歌曲信息
+            const initialSong = ap.list.audios[ap.list.index];
+            if (initialSong) {
+              setCurrentSong({
+                title: initialSong.title,
+                author: initialSong.author,
+                pic: initialSong.pic
+              });
+            }
+            
+            clearInterval(checkTimer);
+          }
+        }, 1000);
+        return () => clearInterval(checkTimer);
+      })
       .catch(err => console.error('Failed to load music player scripts:', err));
   }, []);
+
+  // 控制函数
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (aplayerRef.current) {
+      aplayerRef.current.toggle();
+    }
+  };
+
+  const nextSong = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (aplayerRef.current) {
+      aplayerRef.current.list.next();
+    }
+  };
 
   // Handle loading state
   useEffect(() => {
@@ -52,7 +112,7 @@ export function MusicPlayer() {
       const timer = setTimeout(() => {
         setIsLoading(true);
         hasLoadedOnce.current = true;
-        setTimeout(() => setIsLoading(false), 5000);
+        setTimeout(() => setIsLoading(false), 2000);
       }, 0);
       return () => clearTimeout(timer);
     }
@@ -62,11 +122,11 @@ export function MusicPlayer() {
     if (isOpen) {
       const timer = setTimeout(() => {
         setIsLoading(true);
-        setTimeout(() => setIsLoading(false), 5000);
+        setTimeout(() => setIsLoading(false), 2000);
       }, 0);
       return () => clearTimeout(timer);
     }
-  }, [playlistId]);
+  }, [playlistId, isOpen]);
   
   useEffect(() => {
     localStorage.setItem('music-playlist-id', playlistId);
@@ -80,6 +140,18 @@ export function MusicPlayer() {
     const style = document.createElement('style');
     style.id = styleId;
     style.innerHTML = `
+      /* CD 旋转动画 */
+      @keyframes spin-cd {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      .animate-spin-cd {
+        animation: spin-cd 10s linear infinite;
+      }
+      .animate-spin-cd-paused {
+        animation-play-state: paused;
+      }
+      
       /* Hide outer scrollbar but allow scrolling */
       .music-player-scroll-container::-webkit-scrollbar {
         display: none; /* Chrome, Safari, Opera */
@@ -242,9 +314,6 @@ export function MusicPlayer() {
     `;
     document.head.appendChild(style);
     return () => {
-      // Keep style on unmount or remove? Better remove to avoid conflicts if re-mounted
-      // But since it's global for APlayer, keeping it is fine. 
-      // Actually let's remove it to be clean.
       const existingStyle = document.getElementById(styleId);
       if (existingStyle) {
         existingStyle.remove();
@@ -277,119 +346,175 @@ export function MusicPlayer() {
   };
 
   return (
-    <div className="fixed z-50 bottom-32 right-4 transition-all duration-300 ease-in-out">
-      {/* 悬浮按钮 (当播放器关闭时显示) */}
-      {!isOpen && (
-        <Button
-          onClick={() => setIsOpen(true)}
-          size="icon"
-          className="h-12 w-12 rounded-full shadow-lg bg-primary hover:bg-primary/90 text-primary-foreground animate-bounce-slow"
-          title="打开音乐播放器"
-        >
-          <Music className="h-6 w-6" />
-        </Button>
-      )}
-
-      {/* 播放器面板 */}
-      <div className={cn(
-        "relative bg-background/95 backdrop-blur-md border border-border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 origin-bottom-right",
-        isOpen ? "w-[90vw] h-[70vh] sm:w-[500px] md:w-[40vw] min-h-[600px] opacity-100 scale-100 translate-y-28" : "w-0 h-0 opacity-0 scale-0 pointer-events-none"
-      )}>
-        {/* Loading Overlay */}
-        {isLoading && <MusicParticleLoader />}
-
-        {/* 标题栏 */}
-        <div className="flex items-center justify-between p-3 bg-muted/50 border-b border-border">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 bg-primary/10 rounded-full">
-              <Disc className={cn("h-4 w-4 text-primary", isOpen && "animate-spin-slow")} />
-            </div>
-            <span className="font-medium text-sm">网易云音乐</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => {
-                setIsSettingsOpen(!isSettingsOpen);
-                if (!isSettingsOpen) setTempId(playlistId);
-              }}
-              title="设置歌单"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setIsOpen(false)}
-              title="最小化"
-            >
-              <Minimize2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* 设置面板 */}
-        {isSettingsOpen ? (
-          <div className="p-4 space-y-4 h-[calc(100%-48px)] flex flex-col justify-center">
-            <div className="space-y-2">
-              <Label htmlFor="playlist-id">歌单 ID</Label>
-              <Input
-                id="playlist-id"
-                value={tempId}
-                onChange={(e) => setTempId(e.target.value)}
-                placeholder="输入网易云歌单ID"
-              />
-              <p className="text-xs text-muted-foreground">
-                在网易云音乐网页版 URL 中找到 id 参数，例如: 3778678
-              </p>
-            </div>
-            <div className="flex gap-2">
-                  <Button 
-                    className="flex-1" 
-                    onClick={handleUpdatePlaylist}
-                  >
-                    确认
-                  </Button>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    variant="ghost" 
-                    className="flex-1 text-xs h-8" 
-                    onClick={handlePreviewAnimation}
-                  >
-                    预览加载动画
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    className="flex-1 text-xs h-8" 
-                    onClick={handleResetPlaylist}
-                  >
-                    重置为热歌榜
-                  </Button>
-                </div>
-                <p className="text-[10px] text-center text-muted-foreground/50">
-                   如果歌单无法播放，请尝试重置或检查 ID 是否有效
-                </p>
-              </div>
+    <div className={cn(
+      "fixed z-50 bottom-24 right-0 transition-all duration-500 ease-in-out flex items-center",
+      isMinimized ? "translate-x-[calc(100%-32px)]" : "translate-x-0"
+    )}>
+      {/* 展开/收起按钮 (侧边箭头) */}
+      <button
+        onClick={() => setIsMinimized(!isMinimized)}
+        className="flex items-center justify-center w-8 h-12 bg-background/80 backdrop-blur-md border border-r-0 border-border/50 rounded-l-xl hover:bg-background transition-all shadow-lg group/arrow"
+      >
+        {isMinimized ? (
+          <ChevronLeft className="h-4 w-4 text-primary animate-pulse" />
         ) : (
-          /* 播放器 Iframe */
-          <div className="h-[calc(100%-48px)] w-full overflow-y-auto music-player-scroll-container">
-            {/* @ts-expect-error meting-js is a custom element */}
-            <meting-js
-              server="netease"
-              type="playlist"
-              id={playlistId}
-              autoplay="true"
-              order="random"
-              loop="all"
-              list-max-height="50vh"
-              theme="hsl(var(--primary))"
-            />
+          <ChevronRight className="h-4 w-4 text-muted-foreground group-hover/arrow:text-primary transition-colors" />
+        )}
+      </button>
+
+      {/* 播放器内容区域 */}
+      <div className="bg-background/80 backdrop-blur-md border border-l-0 border-border/50 p-1 pr-3 rounded-r-none rounded-l-none shadow-xl flex items-center gap-3">
+        {/* 迷你控制器 (当播放器面板关闭时显示在侧边栏内) */}
+        {!isOpen && (
+          <div 
+            onClick={() => setIsOpen(true)}
+            className="flex items-center gap-2 transition-all cursor-pointer group/mini overflow-hidden"
+          >
+            {/* 滚动的 CD 封面 */}
+            <div className="relative flex-shrink-0 ml-1">
+              <div className={cn(
+                "h-10 w-10 rounded-full border border-primary/20 overflow-hidden flex items-center justify-center bg-muted shadow-inner",
+                isPlaying ? "animate-spin-cd" : "animate-spin-cd animate-spin-cd-paused"
+              )}>
+                {currentSong?.pic ? (
+                  <img src={currentSong.pic} alt="cover" className="h-full w-full object-cover" />
+                ) : (
+                  <Music className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              {/* CD 中心点 */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 bg-background border border-primary/20 rounded-full z-10 shadow-sm" />
+            </div>
+
+            {/* 歌曲信息 (仅 PC 端显示) */}
+            <div className="hidden lg:flex flex-col min-w-[100px] max-w-[140px]">
+              <span className="text-[11px] font-bold truncate leading-tight text-foreground/90">{currentSong?.title || '未在播放'}</span>
+              <span className="text-[10px] text-muted-foreground truncate leading-tight">{currentSong?.author || 'Lumi Music'}</span>
+            </div>
+
+            {/* 控制按钮 */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                onClick={togglePlay}
+              >
+                {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 translate-x-0.5" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                onClick={nextSong}
+              >
+                <SkipForward className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
+
+        {/* 播放器面板 (点击迷你控制器后弹出) */}
+        <div className={cn(
+          "absolute bottom-full right-4 mb-4 bg-background/95 backdrop-blur-md border border-border rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 origin-bottom-right",
+          isOpen ? "w-[90vw] h-[70vh] sm:w-[500px] md:w-[40vw] min-h-[400px] opacity-100 scale-100" : "w-0 h-0 opacity-0 scale-0 pointer-events-none"
+        )}>
+          {/* Loading Overlay */}
+          {isLoading && <MusicParticleLoader />}
+
+          {/* 标题栏 */}
+          <div className="flex items-center justify-between p-3 bg-muted/50 border-b border-border">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-primary/10 rounded-full">
+                <Disc className={cn("h-4 w-4 text-primary", isPlaying && "animate-spin-slow")} />
+              </div>
+              <span className="font-medium text-sm">网易云音乐</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => {
+                  setIsSettingsOpen(!isSettingsOpen);
+                  if (!isSettingsOpen) setTempId(playlistId);
+                }}
+                title="设置歌单"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setIsOpen(false)}
+                title="最小化"
+              >
+                <Minimize2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* 设置面板 */}
+          {isSettingsOpen ? (
+            <div className="p-4 space-y-4 h-[calc(100%-48px)] flex flex-col justify-center">
+              <div className="space-y-2">
+                <Label htmlFor="playlist-id">歌单 ID</Label>
+                <Input
+                  id="playlist-id"
+                  value={tempId}
+                  onChange={(e) => setTempId(e.target.value)}
+                  placeholder="输入网易云歌单ID"
+                />
+                <p className="text-xs text-muted-foreground">
+                  在网易云音乐网页版 URL 中找到 id 参数，例如: 3778678
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  className="flex-1" 
+                  onClick={handleUpdatePlaylist}
+                >
+                  确认
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="ghost" 
+                  className="flex-1 text-xs h-8" 
+                  onClick={handlePreviewAnimation}
+                >
+                  预览加载动画
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="flex-1 text-xs h-8" 
+                  onClick={handleResetPlaylist}
+                >
+                  重置为热歌榜
+                </Button>
+              </div>
+              <p className="text-[10px] text-center text-muted-foreground/50">
+                 如果歌单无法播放，请尝试重置或检查 ID 是否有效
+              </p>
+            </div>
+          ) : (
+            /* 播放器 Iframe */
+            <div className="h-[calc(100%-48px)] w-full overflow-y-auto music-player-scroll-container">
+              {/* @ts-expect-error meting-js is a custom element */}
+              <meting-js
+                server="netease"
+                type="playlist"
+                id={playlistId}
+                autoplay="false"
+                order="random"
+                loop="all"
+                list-max-height="50vh"
+                theme="hsl(var(--primary))"
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

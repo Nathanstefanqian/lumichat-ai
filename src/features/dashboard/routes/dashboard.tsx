@@ -434,6 +434,9 @@ export function Dashboard() {
           <Menu className="w-5 h-5" />
         </button>
 
+        {/* Music Player - Floating in bottom right */}
+        <MusicPlayer />
+
         {/* Mobile Menu Drawer */}
         {isMobileMenuOpen && (
           <div className="md:hidden fixed inset-0 z-[100] flex justify-end">
@@ -512,7 +515,6 @@ export function Dashboard() {
         </div>
       )}
       </main>
-      <MusicPlayer />
     </div>
   );
 }
