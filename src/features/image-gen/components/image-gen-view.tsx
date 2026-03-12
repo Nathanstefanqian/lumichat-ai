@@ -9,6 +9,7 @@ import {
   Upload,
   Trash2,
   Coins,
+  Download,
 } from 'lucide-react';
 import { generateImage, uploadReferenceImage, getHistory, deleteHistory, getTotalCost, type GeneratedImage as ApiGeneratedImage } from '../api/image-gen';
 import { toast } from 'sonner';
@@ -143,6 +144,45 @@ export function ImageGenView() {
       toast.error(errorMessage);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownload = async (url: string, filename?: string) => {
+    try {
+      // Direct download via window.open if fetch fails or for simpler approach
+      // But for filename control, we usually need blob.
+      // Given CORS issues with OSS, we'll try to use a link with target="_blank" and download attribute
+      // or just open in new tab if blob fetch fails.
+      
+      const response = await fetch(url, { mode: 'cors' }).catch(() => null);
+      if (response && response.ok) {
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename || `lumi-ai-gen-${Date.now()}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(blobUrl);
+      } else {
+        // Fallback: Open in new tab
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        // Add download attribute (might not work cross-origin without CORS, but better than nothing)
+        link.setAttribute('download', filename || '');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.info('由于浏览器安全限制，请在打开的新窗口中右键点击图片选择“另存为”');
+      }
+    } catch (error) {
+      console.error('Download failed', error);
+      // Last resort fallback
+      window.open(url, '_blank');
+      toast.error('下载失败，请在打开的页面中右键另存为');
     }
   };
 
@@ -485,6 +525,13 @@ export function ImageGenView() {
                   />
                   <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
                     <button
+                      onClick={() => handleDownload(imageUrl)}
+                      className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-full font-medium shadow-lg hover:scale-105 transition-transform"
+                    >
+                      <Download className="w-5 h-5" />
+                      下载图片
+                    </button>
+                    <button
                       onClick={() => setIsPreviewOpen(true)}
                       className="flex items-center gap-2 px-6 py-3 bg-white text-black rounded-full font-medium shadow-lg hover:scale-105 transition-transform"
                     >
@@ -535,7 +582,17 @@ export function ImageGenView() {
                         alt={img.prompt}
                         className="w-full h-full object-cover transition-transform group-hover:scale-105"
                       />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(img.url);
+                          }}
+                          className="p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-colors transform hover:scale-110"
+                          title="下载"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={(e) => handleDelete(e, img.id)}
                           className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full transition-colors transform hover:scale-110"
@@ -557,11 +614,20 @@ export function ImageGenView() {
         <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-transparent border-none shadow-none flex items-center justify-center">
           <div className="relative w-full h-full flex items-center justify-center">
             {imageUrl && (
-              <img
-                src={imageUrl}
-                alt="Full Preview"
-                className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-              />
+              <div className="flex flex-col items-center gap-4">
+                <img
+                  src={imageUrl}
+                  alt="Full Preview"
+                  className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+                />
+                <button
+                  onClick={() => handleDownload(imageUrl)}
+                  className="flex items-center gap-2 px-8 py-3 bg-white text-black rounded-full font-bold shadow-2xl hover:scale-105 transition-transform"
+                >
+                  <Download className="w-6 h-6" />
+                  保存图片到本地
+                </button>
+              </div>
             )}
             <button
               onClick={() => setIsPreviewOpen(false)}

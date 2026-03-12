@@ -13,13 +13,19 @@ import {
   Clapperboard,
   Snowflake,
   FileArchive,
+  Clock,
+  Gift,
+  Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useUserChatStore } from '@/stores/user-chat';
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { getProfile } from '@/features/auth/api/get-profile';
+import { CartoonFlame } from '@/components/ui/cartoon-flame';
 
-export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings' | 'game-center' | 'video-task' | 'watch-party' | 'snow-world' | 'media-compressor';
+export type TabType = 'chat' | 'image' | 'voice' | 'user' | 'settings' | 'game-center' | 'video-task' | 'watch-party' | 'snow-world' | 'media-compressor' | 'alarm-clock' | 'new-year' | 'check-in';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -31,8 +37,28 @@ interface SidebarProps {
 export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: SidebarProps) {
   const logout = useAuthStore((state) => state.logout);
   const user = useAuthStore((state) => state.user);
+  const setUser = useAuthStore((state) => state.setUser);
+  const token = useAuthStore((state) => state.token);
   const unreadTotal = useUserChatStore((state) => state.unreadTotal);
   const navigate = useNavigate();
+
+  // 侧边栏加载时自动获取一次用户信息以更新头像
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (token && user) {
+        try {
+          const fullProfile = await getProfile(user.userId);
+          setUser({
+            ...user,
+            ...fullProfile
+          });
+        } catch (error) {
+          console.error('Failed to fetch profile in sidebar:', error);
+        }
+      }
+    };
+    fetchProfile();
+  }, [token]);
 
   const handleLogout = () => {
     logout();
@@ -44,10 +70,13 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
     { id: 'user', icon: Users, label: '用户对话', color: 'text-indigo-500' },
     { id: 'video-task', icon: Video, label: '视频企划', color: 'text-rose-500' },
     { id: 'watch-party', icon: Clapperboard, label: '浪漫放映室', color: 'text-pink-500' },
+    { id: 'check-in', icon: Calendar, label: '每日打卡', color: 'text-emerald-500' },
     { id: 'media-compressor', icon: FileArchive, label: '媒体压缩', color: 'text-teal-500' },
     { id: 'image', icon: ImageIcon, label: 'AI 图片/视频', color: 'text-purple-500' },
     { id: 'voice', icon: Mic, label: 'AI 语音', color: 'text-green-500' },
     { id: 'game-center', icon: Gamepad2, label: '游戏中心', color: 'text-orange-500' },
+    { id: 'alarm-clock', icon: Clock, label: '3D 闹钟', color: 'text-yellow-500' },
+    { id: 'new-year', icon: Gift, label: '新年快乐', color: 'text-red-500' },
     { id: 'snow-world', icon: Snowflake, label: '冰雪世界', color: 'text-cyan-500', className: 'hidden md:flex' },
     { id: 'settings', icon: Settings, label: '设置', color: 'text-gray-500' },
   ];
@@ -132,12 +161,15 @@ export function Sidebar({ isOpen, toggleSidebar, activeTab, onTabChange }: Sideb
               
               <span 
                 className={cn(
-                  "ml-3 font-medium transition-all duration-300 whitespace-nowrap overflow-hidden",
+                  "ml-3 font-medium transition-all duration-300 whitespace-nowrap overflow-hidden flex items-center gap-2",
                   isActive ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
                   isOpen ? "opacity-100 w-auto" : "opacity-0 w-0 ml-0"
                 )}
               >
                 {item.label}
+                {item.id === 'game-center' && (
+                  <CartoonFlame className="scale-[0.3] -ml-4 -mr-4" />
+                )}
               </span>
             </button>
           );

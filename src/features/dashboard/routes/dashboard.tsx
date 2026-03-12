@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/layout/sidebar';
 import type { TabType } from '@/components/layout/sidebar';
 import { useAuthStore } from '@/stores/auth';
-import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, LogOut, Maximize, Minimize, Stars, FileArchive } from 'lucide-react';
+import { Sparkles, Image as ImageIcon, Mic, Sun, Moon, Leaf, Heart, Users, Settings, Menu, X, UserPlus, Gamepad2, Video, Clapperboard, LogOut, Maximize, Minimize, Stars, FileArchive, Clock, Gift } from 'lucide-react';
 import { ChatView } from '@/features/ai/components/chat-view';
 import { UserChatView } from '@/features/chat/components/user-chat-view';
 import { SettingsView } from '@/features/settings/components/settings-view';
@@ -19,6 +19,9 @@ import { toast } from 'sonner';
 import { MusicPlayer } from '@/components/ui/music-player';
 import { SnowWorld } from '@/features/snow-world/routes/snow-world';
 import { MediaCompressor } from '@/features/tools/media-compressor';
+import { ThreeDAlarmClock } from '@/components/ui/three-d-alarm-clock';
+import { NewYearPage } from '@/features/new-year/routes/new-year';
+import { CheckInPage } from '@/features/check-in/routes/check-in-page';
 
 const ACTIVE_TAB_KEY = 'dashboard-active-tab';
 
@@ -290,12 +293,23 @@ export function Dashboard() {
     switch (activeTab) {
       case 'chat':
         return <ChatView />;
+      case 'new-year':
+        return (
+          <div className="flex-1 overflow-hidden relative">
+            <NewYearPage />
+            <Gift className="hidden" /> 
+          </div>
+        );
       case 'video-task':
         return <VideoPlannerPage />;
       case 'watch-party':
         return <WatchPartyPage />;
       case 'media-compressor':
-        return <MediaCompressor />;
+        return (
+          <div className="flex-1 overflow-hidden">
+            <MediaCompressor />
+          </div>
+        );
       case 'settings':
         return <SettingsView />;
       case 'game-center':
@@ -304,6 +318,25 @@ export function Dashboard() {
         return <SnowWorld />;
       case 'image':
         return <ImageGenView />;
+      case 'check-in':
+        return <CheckInPage />;
+      case 'alarm-clock':
+        return (
+          <div className="flex-1 p-4 md:p-8 overflow-y-auto scrollbar-hidden theme-page">
+            <div className="max-w-4xl mx-auto space-y-8">
+              <div className="flex items-center space-x-4 mb-8">
+                <div className="p-3 theme-accent rounded-2xl shadow-sm">
+                  <Clock className="w-8 h-8 text-foreground" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold theme-text">3D 金属质感闹钟</h2>
+                  <p className="theme-subtle">高精度建模与实时物理渲染</p>
+                </div>
+              </div>
+              <ThreeDAlarmClock />
+            </div>
+          </div>
+        );
       case 'voice':
         return (
           <div className="flex-1 p-4 md:p-8 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-8 theme-muted overflow-y-auto scrollbar-hidden">
@@ -352,6 +385,7 @@ export function Dashboard() {
         <header className="hidden md:flex h-16 theme-surface border-b items-center justify-between px-8 shadow-sm z-10">
           <h1 className="text-lg font-semibold theme-text">
             {activeTab === 'chat' && '对话'}
+            {activeTab === 'new-year' && '新年快乐'}
             {activeTab === 'user' && '用户对话'}
             {activeTab === 'video-task' && '视频企划'}
             {activeTab === 'watch-party' && '浪漫放映室'}

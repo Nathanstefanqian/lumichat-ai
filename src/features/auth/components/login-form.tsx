@@ -38,14 +38,7 @@ export function LoginForm() {
   });
 
   const onSubmit = (data: LoginFormData) => {
-    if (data.username === 'codegod') {
-      login({
-        username: 'test',
-        password: 'Password123!',
-      });
-    } else {
-      login(data);
-    }
+    login(data);
   };
 
   return (

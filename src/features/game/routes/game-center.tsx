@@ -3,13 +3,16 @@ import { PlaneShooterGame } from '../components/plane-shooter-game';
 import { GomokuGame } from '../components/gomoku/gomoku-game';
 import { WatermelonGame } from '../components/watermelon/watermelon-game';
 import { BilliardsGame } from '../components/billiards/billiards-game';
+import { FlappyBirdGame } from '../components/flappy-bird-game';
+import { ZumaGame } from '../components/zuma/zuma-game';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Gamepad2, Grid3X3, Circle, CircleDot } from 'lucide-react';
+import { ArrowLeft, Gamepad2, Grid3X3, Circle, CircleDot, Bird } from 'lucide-react';
+import { CartoonFlame } from '@/components/ui/cartoon-flame';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type GameType = 'plane-shooter' | 'gomoku' | 'watermelon' | 'billiards';
+type GameType = 'plane-shooter' | 'gomoku' | 'watermelon' | 'billiards' | 'flappy-bird' | 'zuma';
 
 interface GameInfo {
   id: GameType;
@@ -20,6 +23,20 @@ interface GameInfo {
 }
 
 const GAMES: GameInfo[] = [
+  {
+    id: 'zuma',
+    title: '幻彩祖玛',
+    description: '精准射击，消除彩色球串！',
+    icon: CircleDot,
+    color: 'text-purple-500',
+  },
+  {
+    id: 'flappy-bird',
+    title: '笨鸟先飞',
+    description: '挑战极限，你能飞多远？',
+    icon: Bird,
+    color: 'text-yellow-500',
+  },
   {
     id: 'plane-shooter',
     title: '星际战机',
@@ -75,16 +92,21 @@ export function GameCenter() {
           {activeGame === 'gomoku' && <GomokuGame />}
           {activeGame === 'watermelon' && <WatermelonGame />}
           {activeGame === 'billiards' && <BilliardsGame />}
+          {activeGame === 'flappy-bird' && <FlappyBirdGame />}
+          {activeGame === 'zuma' && <ZumaGame />}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="p-4 md:p-8 h-full overflow-y-auto">
-      <h1 className="text-2xl md:text-3xl font-bold mb-6 md:mb-8 bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-        游戏中心
-      </h1>
+    <div className="p-4 md:p-8 h-full overflow-y-auto relative">
+      <div className="flex items-center gap-4 mb-6 md:mb-8">
+        <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
+          游戏中心
+        </h1>
+        <CartoonFlame className="-mt-12 scale-75 md:scale-100" />
+      </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
         {GAMES.map((game) => (
@@ -96,13 +118,18 @@ export function GameCenter() {
             <div className="absolute inset-0 bg-gradient-to-br from-transparent to-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             
             <CardHeader className="p-4 md:p-6">
-              <div className="flex items-center gap-3 md:gap-4 mb-1 md:mb-2">
-                <div className={cn("p-2.5 md:p-3 rounded-xl bg-secondary group-hover:scale-110 transition-transform duration-300", game.color)}>
-                  <game.icon className="w-6 h-6 md:w-8 md:h-8" />
+              <div className="flex items-center justify-between mb-1 md:mb-2">
+                <div className="flex items-center gap-3 md:gap-4">
+                  <div className={cn("p-2.5 md:p-3 rounded-xl bg-secondary group-hover:scale-110 transition-transform duration-300", game.color)}>
+                    <game.icon className="w-6 h-6 md:w-8 md:h-8" />
+                  </div>
+                  <CardTitle className="text-lg md:text-xl group-hover:text-primary transition-colors">
+                    {game.title}
+                  </CardTitle>
                 </div>
-                <CardTitle className="text-lg md:text-xl group-hover:text-primary transition-colors">
-                  {game.title}
-                </CardTitle>
+                {game.id === 'zuma' && (
+                  <CartoonFlame className="scale-50 -mr-4" />
+                )}
               </div>
             </CardHeader>
             

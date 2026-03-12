@@ -135,7 +135,7 @@ export function MediaCompressor() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto h-full overflow-y-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto h-full overflow-y-auto scrollbar-hidden">
       <h1 className="text-2xl md:text-3xl font-bold mb-2 bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
         图片/视频压缩工具
       </h1>

@@ -14,6 +14,8 @@ export interface User {
   email: string;
   username: string;
   avatar?: string;
+  points?: number;
+  role?: string;
 }
 
 export interface LoginResponse {

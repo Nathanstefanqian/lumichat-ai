@@ -597,7 +597,7 @@ export function ChatView() {
                         )}
                       >
                         <Globe className="w-3.5 h-3.5" />
-                        联网搜索
+                        知识库搜索
                       </button>
                       <button
                         onClick={() => setEnableThinking(!enableThinking)}
