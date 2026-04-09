@@ -6,6 +6,8 @@ interface ApiMessage {
   role: ChatRole;
   content: string;
   reasoning_content?: string;
+  fileUrl?: string;
+  duration?: number;
   createdAt: string;
 }
 
@@ -18,6 +20,8 @@ export const getAiMessages = async (conversationId: string): Promise<ChatMessage
     role: item.role,
     content: item.content,
     reasoning_content: item.reasoning_content,
+    fileUrl: item.fileUrl,
+    duration: item.duration,
     status: 'synced',
     createdAt: item.createdAt ? new Date(item.createdAt).getTime() : Date.now(),
   }));

@@ -2,17 +2,21 @@ import api from '@/lib/axios';
 
 export interface GenerateImageOptions {
   model?: string;
-  aspect_ratio?: string;
-  prompt_optimizer?: boolean;
-  aigc_watermark?: boolean;
+  size?: string;
+  watermark?: boolean;
   seed?: number;
-  reference_image?: string;
-  style?: {
-    style_type: string;
-    style_weight?: number;
+  reference_images?: string[];
+  sequential_image_generation?: 'auto' | 'disabled';
+  sequential_image_generation_options?: {
+    max_images?: number;
   };
-  width?: number;
-  height?: number;
+  tools?: Array<{ type: string }>;
+  stream?: boolean;
+  guidance_scale?: number;
+  optimize_prompt_options?: {
+    mode: string;
+  };
+  output_format?: string;
   n?: number;
 }
 
@@ -39,16 +43,7 @@ export const generateImage = async (
 ) => {
   return api.post<{ imageUrl: string }>('/ai/image/generate', {
     prompt,
-    model: options.model || 'image-01',
-    aspect_ratio: options.aspect_ratio || '1:1',
-    prompt_optimizer: options.prompt_optimizer,
-    aigc_watermark: options.aigc_watermark,
-    seed: options.seed,
-    reference_image: options.reference_image,
-    style: options.style,
-    width: options.width,
-    height: options.height,
-    n: options.n,
+    ...options
   }) as unknown as Promise<{ imageUrl: string }>;
 };
 

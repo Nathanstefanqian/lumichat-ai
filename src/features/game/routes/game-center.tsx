@@ -5,14 +5,14 @@ import { WatermelonGame } from '../components/watermelon/watermelon-game';
 import { BilliardsGame } from '../components/billiards/billiards-game';
 import { FlappyBirdGame } from '../components/flappy-bird-game';
 import { ZumaGame } from '../components/zuma/zuma-game';
+import { LaserTagView } from '../laser-tag/components/LaserTagView';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Gamepad2, Grid3X3, Circle, CircleDot, Bird } from 'lucide-react';
-import { CartoonFlame } from '@/components/ui/cartoon-flame';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type GameType = 'plane-shooter' | 'gomoku' | 'watermelon' | 'billiards' | 'flappy-bird' | 'zuma';
+type GameType = 'plane-shooter' | 'gomoku' | 'watermelon' | 'billiards' | 'flappy-bird' | 'zuma' | 'laser-tag';
 
 interface GameInfo {
   id: GameType;
@@ -23,6 +23,13 @@ interface GameInfo {
 }
 
 const GAMES: GameInfo[] = [
+  {
+    id: 'laser-tag',
+    title: '激光对战',
+    description: '快节奏的激光射击竞技场！',
+    icon: Gamepad2,
+    color: 'text-cyan-400',
+  },
   {
     id: 'zuma',
     title: '幻彩祖玛',
@@ -75,18 +82,21 @@ export function GameCenter() {
   };
 
   if (activeGame) {
+    const isLaserTag = activeGame === 'laser-tag';
     return (
-      <div className="flex flex-col h-full relative">
-        <div className="absolute top-4 left-4 z-50">
-          <Button 
-            variant="outline" 
-            size="icon" 
-            onClick={handleBack}
-            className="bg-background/80 backdrop-blur-sm hover:bg-background/90 rounded-full shadow-lg"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </div>
+      <div className={cn("flex flex-col h-full relative", isLaserTag && "fixed inset-0 z-[9999] bg-black")}>
+        {!isLaserTag && (
+          <div className="absolute top-4 left-4 z-[100]">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={handleBack}
+              className="bg-background/80 backdrop-blur-sm hover:bg-background/90 rounded-full shadow-lg border-primary/20"
+            >
+              <ArrowLeft className="h-5 w-5 text-primary" />
+            </Button>
+          </div>
+        )}
         <div className="flex-1 h-full overflow-hidden">
           {activeGame === 'plane-shooter' && <PlaneShooterGame />}
           {activeGame === 'gomoku' && <GomokuGame />}
@@ -94,6 +104,7 @@ export function GameCenter() {
           {activeGame === 'billiards' && <BilliardsGame />}
           {activeGame === 'flappy-bird' && <FlappyBirdGame />}
           {activeGame === 'zuma' && <ZumaGame />}
+          {activeGame === 'laser-tag' && <LaserTagView />}
         </div>
       </div>
     );
@@ -105,7 +116,6 @@ export function GameCenter() {
         <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
           游戏中心
         </h1>
-        <CartoonFlame className="-mt-12 scale-75 md:scale-100" />
       </div>
       
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
@@ -127,9 +137,6 @@ export function GameCenter() {
                     {game.title}
                   </CardTitle>
                 </div>
-                {game.id === 'zuma' && (
-                  <CartoonFlame className="scale-50 -mr-4" />
-                )}
               </div>
             </CardHeader>
             

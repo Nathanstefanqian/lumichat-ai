@@ -1,6 +1,7 @@
 import { useThemeStore } from '@/stores/theme';
 import { useAuthStore } from '@/stores/auth';
-import { Sun, Moon, Leaf, Heart, Coffee, Monitor, Settings as SettingsIcon, User, Save, Loader2, Stars } from 'lucide-react';
+import { useSpecialStore } from '@/stores/special';
+import { Sun, Moon, Leaf, Heart, Coffee, Monitor, Settings as SettingsIcon, User, Save, Loader2, Stars, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AvatarUpload } from './avatar-upload';
 import { useState } from 'react';
@@ -15,7 +16,24 @@ export function SettingsView() {
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
   const { user, setUser } = useAuthStore();
+  const { setShowEntry } = useSpecialStore();
   
+  const [showPasswordInput, setShowPasswordInput] = useState(false);
+  const [specialPassword, setSpecialPassword] = useState('');
+  const [specialError, setSpecialError] = useState(false);
+
+  const handleOpenSpecial = () => {
+    if (specialPassword === '070723') {
+      setShowEntry(true);
+      setShowPasswordInput(false);
+      setSpecialPassword('');
+      setSpecialError(false);
+    } else {
+      setSpecialError(true);
+      setTimeout(() => setSpecialError(false), 2000);
+    }
+  };
+
   const [formData, setFormData] = useState({
     username: user?.username || '',
     email: user?.email || '',
@@ -270,6 +288,65 @@ export function SettingsView() {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div className="bg-card rounded-2xl p-6 shadow-sm border border-border">
+            <div className="flex items-center space-x-3 mb-6">
+              <Mail className="w-5 h-5 text-pink-500" />
+              <h3 className="text-lg font-semibold">特别消息</h3>
+            </div>
+            
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">这里藏着笨猪给你的悄悄话...</p>
+              
+              {!showPasswordInput ? (
+                <Button 
+                  variant="outline" 
+                  className="w-full justify-start gap-3 py-6 border-pink-500/20 hover:bg-pink-500/5 hover:border-pink-500/40 text-pink-600 font-medium group"
+                  onClick={() => setShowPasswordInput(true)}
+                >
+                  <div className="p-2 bg-pink-100 rounded-lg group-hover:bg-pink-200 transition-colors">
+                    <Mail className="w-4 h-4 text-pink-600" />
+                  </div>
+                  查看笨猪的未读消息
+                </Button>
+              ) : (
+                <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="flex gap-2">
+                    <Input
+                      type="password"
+                      placeholder="请输入 6 位打开密码"
+                      value={specialPassword}
+                      onChange={(e) => setSpecialPassword(e.target.value)}
+                      className={cn(
+                        "flex-1 border-pink-200 focus-visible:ring-pink-500",
+                        specialError && "border-red-500 animate-shake"
+                      )}
+                      onKeyDown={(e) => e.key === 'Enter' && handleOpenSpecial()}
+                      autoFocus
+                    />
+                    <Button 
+                      className="bg-pink-500 hover:bg-pink-600 text-white"
+                      onClick={handleOpenSpecial}
+                    >
+                      确认
+                    </Button>
+                    <Button 
+                      variant="ghost"
+                      onClick={() => {
+                        setShowPasswordInput(false);
+                        setSpecialPassword('');
+                      }}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                  {specialError && (
+                    <p className="text-xs text-red-500 font-medium">密码错误，请笨猪再想想～</p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

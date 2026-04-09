@@ -1,6 +1,6 @@
-# LumiChat Frontend (React)
+# Lumi Frontend (React)
 
-LumiChat 是一个集成了 AI 对话、实时社交、协同观影和视频企划管理的现代化单页应用。本项目基于 React 19、TypeScript 和 Vite 构建，致力于提供流畅、美观且功能丰富的用户体验。
+Lumi 是一个集成了 AI 对话、实时社交、协同观影和视频企划管理的现代化单页应用。核心定位是在 Lumi 这个智能 Agent 的帮助下，让用户更高效地使用平台提供的各项 AI 工具和服务。本项目支持为不同人群个性化定制功能，是一个集各种 AI 工具为一体的综合性站点。基于 React 19、TypeScript 和 Vite 构建，致力于提供流畅、美观且功能丰富的用户体验。
 
 ## 🚀 产品更新日志 (v0.5.0)
 

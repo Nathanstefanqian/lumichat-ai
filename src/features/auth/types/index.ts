@@ -16,6 +16,7 @@ export interface User {
   avatar?: string;
   points?: number;
   role?: string;
+  level?: number;
 }
 
 export interface LoginResponse {

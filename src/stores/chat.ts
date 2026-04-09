@@ -10,6 +10,8 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   reasoning_content?: string;
+  fileUrl?: string;
+  duration?: number;
   status: MessageStatus;  // 消息状态
   createdAt: number;
 }

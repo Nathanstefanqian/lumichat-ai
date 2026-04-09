@@ -1,9 +1,177 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Send, User, Users, ChevronLeft, Trash2, Image as ImageIcon, Mic, X } from 'lucide-react';
+import { Send, User, Users, ChevronLeft, Trash2, Image as ImageIcon, Mic, X, Copy, RotateCcw, Maximize, Minimize, Play, Pause, Phone, Video } from 'lucide-react';
+import { useRtc } from '../hooks/use-rtc';
+import { RtcCallOverlay } from './rtc-call-overlay';
+import { IncomingCallModal } from './incoming-call-modal';
+import { OutgoingCallModal } from './outgoing-call-modal';
+
+function WaveformPlayer({ src }: { src: string }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioData, setAudioData] = useState<number[]>([]);
+
+  useEffect(() => {
+    // 预解析音频生成波形数据
+    const fetchAudioData = async () => {
+      try {
+        const response = await fetch(src);
+        const arrayBuffer = await response.arrayBuffer();
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+        const rawData = audioBuffer.getChannelData(0);
+        const samples = 40; // 波形条数量
+        const blockSize = Math.floor(rawData.length / samples);
+        const filteredData = [];
+        for (let i = 0; i < samples; i++) {
+          const blockStart = blockSize * i;
+          let sum = 0;
+          for (let j = 0; j < blockSize; j++) {
+            sum += Math.abs(rawData[blockStart + j]);
+          }
+          filteredData.push(sum / blockSize);
+        }
+        setAudioData(filteredData);
+        setDuration(audioBuffer.duration);
+        await audioCtx.close();
+      } catch (err) {
+        console.error('Failed to parse waveform:', err);
+      }
+    };
+    fetchAudioData();
+  }, [src]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleEnded = () => {
+    setIsPlaying(false);
+    setCurrentTime(0);
+  };
+
+  return (
+    <div className="flex items-center gap-3 min-w-[180px] h-10 px-3 bg-white/10 rounded-xl backdrop-blur-sm border border-white/20">
+      <audio 
+        ref={audioRef} 
+        src={src} 
+        onTimeUpdate={handleTimeUpdate} 
+        onEnded={handleEnded} 
+        className="hidden" 
+      />
+      <button 
+        onClick={togglePlay}
+        className="w-8 h-8 flex items-center justify-center rounded-full bg-white/20 hover:bg-white/30 transition-colors shrink-0"
+      >
+        {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white ml-0.5" />}
+      </button>
+      
+      <div className="flex-1 flex items-center gap-0.5 h-6 overflow-hidden">
+        {audioData.map((val, i) => {
+          const progress = (currentTime / duration) || 0;
+          const isPlayed = (i / audioData.length) < progress;
+          const height = Math.max(20, val * 150); // 最小高度 20%
+          return (
+            <div 
+              key={i}
+              className={cn(
+                "w-1 rounded-full transition-all duration-300",
+                isPlayed ? "bg-white" : "bg-white/30"
+              )}
+              style={{ height: `${height}%` }}
+            />
+          );
+        })}
+      </div>
+      
+      <span className="text-[10px] font-mono text-white/80 shrink-0 w-8 text-right">
+        {Math.round(duration - currentTime)}s
+      </span>
+    </div>
+  );
+}
+
+function AudioVisualizer({ stream }: { stream: MediaStream }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!stream) return;
+
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const source = audioContext.createMediaStreamSource(stream);
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationId: number;
+
+    const draw = () => {
+      animationId = requestAnimationFrame(draw);
+      analyser.getByteFrequencyData(dataArray);
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      const barWidth = (canvas.width / bufferLength) * 2.5;
+      let barHeight;
+      let x = 0;
+
+      for (let i = 0; i < bufferLength; i++) {
+        barHeight = (dataArray[i] / 255) * canvas.height;
+
+        const gradient = ctx.createLinearGradient(0, canvas.height, 0, 0);
+        gradient.addColorStop(0, '#f2a68d');
+        gradient.addColorStop(1, '#ff6b6b');
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+
+        x += barWidth + 1;
+      }
+    };
+
+    draw();
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      audioContext.close();
+    };
+  }, [stream]);
+
+  return <canvas ref={canvasRef} className="w-full h-8 opacity-80" width={300} height={32} />;
+}
+
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
 import { useSocketStore } from '@/stores/socket';
 import { useUserChatStore } from '@/stores/user-chat';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
 import {
   fetchUsers,
   fetchConversations,
@@ -88,6 +256,142 @@ export function UserChatView() {
   const setSocketLastEvent = useSocketStore((state) => state.setLastEvent);
   const socket = useSocketStore((state) => state.socket);
   const { activeConversationId, setActiveConversationId, setUnreadTotal } = useUserChatStore();
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // RTC 通话
+  const [rtcMode, setRtcMode] = useState<'audio' | 'video'>('audio');
+  const [pendingOutgoingCall, setPendingOutgoingCall] = useState<{
+    targetUserId: number;
+    conversationId: string;
+    mode: 'audio' | 'video';
+  } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{
+    callerId: number;
+    callerName?: string;
+    conversationId: string;
+    mode: 'audio' | 'video';
+  } | null>(null);
+  const {
+    isJoined,
+    remoteUsers,
+    localAudioTrack,
+    localVideoTrack,
+    joinRoom,
+    leaveRoom,
+    toggleAudio,
+    toggleVideo,
+    setLocalVideoPlayer,
+    setRemoteVideoPlayer,
+  } = useRtc({
+    roomId: activeConversation?._id || '',
+    userId: String(currentUser?.userId || ''),
+  });
+
+  const getOtherParticipantId = (conversation?: ChatConversation | null) => {
+    if (!conversation || !currentUser?.userId) return null;
+    const otherId = conversation.participants.find((id) => id !== currentUser.userId);
+    return typeof otherId === 'number' ? otherId : null;
+  };
+
+  const handleStartCall = async (mode: 'audio' | 'video') => {
+    if (!activeConversation) return;
+    const targetUserId = getOtherParticipantId(activeConversation);
+    if (!targetUserId) {
+      alert('未找到通话对象');
+      return;
+    }
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      alert('实时连接未建立，请稍后重试');
+      return;
+    }
+    setRtcMode(mode);
+    setPendingOutgoingCall({
+      targetUserId,
+      conversationId: activeConversation._id,
+      mode,
+    });
+    socket.emit('call:invite', {
+      targetUserId,
+      conversationId: activeConversation._id,
+      mode,
+    });
+  };
+
+  const handleCancelOutgoingCall = () => {
+    if (!pendingOutgoingCall) return;
+    const socket = socketRef.current;
+    if (socket?.connected) {
+      socket.emit('call:end', {
+        targetUserId: pendingOutgoingCall.targetUserId,
+        conversationId: pendingOutgoingCall.conversationId,
+      });
+    }
+    setPendingOutgoingCall(null);
+  };
+
+  const handleLeaveCall = async () => {
+    const socket = socketRef.current;
+    const targetUserId = getOtherParticipantId(activeConversation);
+    if (socket?.connected && targetUserId && activeConversation?._id) {
+      socket.emit('call:end', {
+        targetUserId,
+        conversationId: activeConversation._id,
+      });
+    }
+    setPendingOutgoingCall(null);
+    await leaveRoom();
+  };
+
+  const handleAcceptIncomingCall = async () => {
+    if (!incomingCall) return;
+    const socket = socketRef.current;
+    if (!socket?.connected) {
+      alert('实时连接未建立，请稍后重试');
+      return;
+    }
+    setRtcMode(incomingCall.mode);
+    setActiveConversationId(incomingCall.conversationId);
+    socket.emit('call:accept', {
+      callerId: incomingCall.callerId,
+      conversationId: incomingCall.conversationId,
+      mode: incomingCall.mode,
+    });
+    await joinRoom(incomingCall.mode, incomingCall.conversationId);
+    setIncomingCall(null);
+  };
+
+  const handleRejectIncomingCall = () => {
+    if (!incomingCall) return;
+    const socket = socketRef.current;
+    if (socket?.connected) {
+      socket.emit('call:reject', {
+        callerId: incomingCall.callerId,
+        conversationId: incomingCall.conversationId,
+      });
+    }
+    setIncomingCall(null);
+  };
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen();
+      setIsFullscreen(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     const total = conversations.reduce((acc, conv) => acc + (conv.unreadCount || 0), 0);
@@ -96,6 +400,7 @@ export function UserChatView() {
   
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaStream, setMediaStream] = useState<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -174,6 +479,7 @@ export function UserChatView() {
   const handleStartRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      setMediaStream(stream);
       
       // 动态检测浏览器支持的音频格式
       const mimeTypes = ['audio/mp4', 'audio/aac', 'audio/webm', 'audio/wav'];
@@ -223,6 +529,7 @@ export function UserChatView() {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      setMediaStream(null);
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -237,6 +544,7 @@ export function UserChatView() {
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
+      setMediaStream(null);
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -449,6 +757,49 @@ export function UserChatView() {
       setOnlineUserIds(new Set(payload.userIds));
     };
 
+    const handleCallIncoming = async (payload: {
+      callerId: number;
+      callerName?: string;
+      conversationId: string;
+      mode: 'audio' | 'video';
+    }) => {
+      setIncomingCall(payload);
+    };
+
+    const handleCallAccepted = async (payload: {
+      calleeId: number;
+      conversationId: string;
+      mode: 'audio' | 'video';
+    }) => {
+      if (
+        !pendingOutgoingCall ||
+        pendingOutgoingCall.conversationId !== payload.conversationId
+      ) {
+        return;
+      }
+      await joinRoom(pendingOutgoingCall.mode, pendingOutgoingCall.conversationId);
+      setPendingOutgoingCall(null);
+    };
+
+    const handleCallRejected = (payload: { conversationId: string }) => {
+      if (
+        pendingOutgoingCall &&
+        pendingOutgoingCall.conversationId === payload.conversationId
+      ) {
+        alert('对方拒绝了通话邀请');
+        setPendingOutgoingCall(null);
+      }
+    };
+
+    const handleCallEnded = async () => {
+      if (isJoined) {
+        await leaveRoom();
+      }
+      setPendingOutgoingCall(null);
+      setIncomingCall(null);
+      alert('通话已结束');
+    };
+
     socket.on('chat:message', handleMessage);
     socket.on('friend:request', handleFriendRequest);
     socket.on('friend:request:sent', handleFriendRequestSent);
@@ -458,6 +809,10 @@ export function UserChatView() {
     socket.on('user:online', handleUserOnline);
     socket.on('user:offline', handleUserOffline);
     socket.on('users:online:list', handleOnlineList);
+    socket.on('call:incoming', handleCallIncoming);
+    socket.on('call:accepted', handleCallAccepted);
+    socket.on('call:rejected', handleCallRejected);
+    socket.on('call:ended', handleCallEnded);
 
     return () => {
       socket.off('chat:message', handleMessage);
@@ -469,8 +824,12 @@ export function UserChatView() {
       socket.off('user:online', handleUserOnline);
       socket.off('user:offline', handleUserOffline);
       socket.off('users:online:list', handleOnlineList);
+      socket.off('call:incoming', handleCallIncoming);
+      socket.off('call:accepted', handleCallAccepted);
+      socket.off('call:rejected', handleCallRejected);
+      socket.off('call:ended', handleCallEnded);
     };
-  }, [currentUser?.userId, socket, setSocketLastEvent]);
+  }, [currentUser?.userId, socket, setSocketLastEvent, joinRoom, leaveRoom, pendingOutgoingCall, isJoined]);
 
   // Sync activeConversationId from store to local state
   useEffect(() => {
@@ -695,49 +1054,51 @@ export function UserChatView() {
                     <div className="text-xs text-muted-foreground text-center py-2">暂无好友</div>
                   ) : (
                     friends.map((item) => (
-                      <div
-                        key={item.id}
-                        className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm hover:bg-muted group"
-                      >
-                        <button
-                          onClick={() => handleSelectUser(item.id)}
-                          className="flex-1 flex items-center gap-2 min-w-0"
-                        >
-                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center relative shrink-0 overflow-hidden">
-                            {item.avatar ? (
-                              <img src={item.avatar} alt={item.username} className="w-full h-full object-cover" />
-                            ) : (
-                              <User className="w-4 h-4 text-muted-foreground" />
-                            )}
-                            {onlineUserIds.has(item.id) && (
-                              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full"></span>
-                            )}
-                          </div>
-                          <div className="truncate text-left">
-                            <div className="text-foreground truncate flex items-center gap-2">
-                                {item.username}
-                                {!onlineUserIds.has(item.id) && item.lastSeen && (
-                                    <span className="text-[10px] text-muted-foreground font-normal">
-                                        {formatChatTime(item.lastSeen)}
-                                    </span>
+                      <ContextMenu key={item.id}>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            className="w-full flex items-center justify-between rounded-xl px-3 py-2 text-left text-sm hover:bg-muted group active:scale-[0.98] transition-transform duration-200 touch-none select-none cursor-pointer"
+                          >
+                            <button
+                              onClick={() => handleSelectUser(item.id)}
+                              className="flex-1 flex items-center gap-2 min-w-0"
+                            >
+                              <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center relative shrink-0 overflow-hidden border border-border">
+                                {item.avatar ? (
+                                  <img src={item.avatar} alt={item.username} className="w-full h-full object-cover" />
+                                ) : (
+                                  <User className="w-4 h-4 text-muted-foreground" />
                                 )}
-                            </div>
-                            <div className="text-xs text-muted-foreground truncate">
-                              {item.email}
-                            </div>
+                                {onlineUserIds.has(item.id) && (
+                                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-background rounded-full"></span>
+                                )}
+                              </div>
+                              <div className="truncate text-left">
+                                <div className="text-foreground truncate flex items-center gap-2">
+                                    {item.username}
+                                    {!onlineUserIds.has(item.id) && item.lastSeen && (
+                                        <span className="text-[10px] text-muted-foreground font-normal">
+                                            {formatChatTime(item.lastSeen)}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {item.email}
+                                </div>
+                              </div>
+                            </button>
                           </div>
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteFriend(item.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md hover:bg-background text-muted-foreground hover:text-destructive transition-all ml-2"
-                          title="删除好友"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="w-40 animate-in zoom-in-95 duration-200">
+                          <ContextMenuItem 
+                            onClick={() => handleDeleteFriend(item.id)}
+                            className="gap-2 text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            删除好友
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     ))
                   )}
                 </div>
@@ -759,66 +1120,70 @@ export function UserChatView() {
                     const lastMessageTime = conv.lastMessageAt ? formatChatTime(conv.lastMessageAt) : '';
 
                     return (
-                      <div
-                        key={conv._id}
-                        className={cn(
-                          'w-full text-left rounded-xl p-3 transition flex items-center gap-3 group relative cursor-pointer',
-                          conv._id === activeConversation?._id
-                            ? 'bg-blue-50'
-                            : 'hover:bg-muted',
-                        )}
-                        onClick={() => selectConversation(conv)}
-                      >
-                        {/* Avatar */}
-                        <div className="shrink-0 relative">
-                          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-cyan-400 p-[1px]">
-                            <div className="w-full h-full rounded-[7px] bg-background flex items-center justify-center overflow-hidden">
-                              {conv.participantInfo?.avatar ? (
-                                <img src={conv.participantInfo.avatar} alt={displayName} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="text-sm font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-500 to-cyan-500">
-                                  {avatarChar}
-                                </span>
+                      <ContextMenu key={conv._id}>
+                        <ContextMenuTrigger asChild>
+                          <div
+                            className={cn(
+                              'w-full text-left rounded-xl p-3 transition flex items-center gap-3 group relative cursor-pointer active:scale-[0.98] transition-transform duration-200 touch-none select-none',
+                              conv._id === activeConversation?._id
+                                ? 'bg-blue-50'
+                                : 'hover:bg-muted',
+                            )}
+                            onClick={() => selectConversation(conv)}
+                          >
+                            {/* Avatar */}
+                            <div className="shrink-0 relative">
+                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-cyan-400 p-[1px]">
+                                <div className="w-full h-full rounded-[7px] bg-background flex items-center justify-center overflow-hidden">
+                                  {conv.participantInfo?.avatar ? (
+                                    <img src={conv.participantInfo.avatar} alt={displayName} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-sm font-bold bg-clip-text text-transparent bg-gradient-to-br from-indigo-500 to-cyan-500">
+                                      {avatarChar}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {/* Unread Badge */}
+                              {conv.unreadCount !== undefined && conv.unreadCount > 0 && (
+                                <div className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-background shadow-sm z-10">
+                                  {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+                                </div>
                               )}
                             </div>
-                          </div>
-                          {/* Unread Badge */}
-                          {conv.unreadCount !== undefined && conv.unreadCount > 0 && (
-                            <div className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-background shadow-sm z-10">
-                              {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
+
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className={cn(
+                                  "font-medium truncate text-sm",
+                                  conv._id === activeConversation?._id ? "text-blue-900" : "text-foreground"
+                                )}>
+                                  {displayName}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                                  {lastMessageTime}
+                                </span>
+                              </div>
+                              <div className={cn(
+                                "truncate text-xs",
+                                conv._id === activeConversation?._id ? "text-blue-700/80" : "text-muted-foreground"
+                              )}>
+                                {conv.lastMessagePreview || '开始新的对话'}
+                              </div>
                             </div>
-                          )}
-                        </div>
-
-                        {/* Content */}
-                        <div className="flex-1 min-w-0 flex flex-col justify-center">
-                          <div className="flex items-center justify-between mb-0.5">
-                            <span className={cn(
-                              "font-medium truncate text-sm",
-                              conv._id === activeConversation?._id ? "text-blue-900" : "text-foreground"
-                            )}>
-                              {displayName}
-                            </span>
-                            <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
-                              {lastMessageTime}
-                            </span>
                           </div>
-                          <div className={cn(
-                            "truncate text-xs",
-                            conv._id === activeConversation?._id ? "text-blue-700/80" : "text-muted-foreground"
-                          )}>
-                            {conv.lastMessagePreview || '开始新的对话'}
-                          </div>
-                        </div>
-
-                        <button
-                          onClick={(e) => handleDeleteConversationItem(conv._id, e)}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1.5 rounded-md bg-background/80 hover:bg-destructive hover:text-destructive-foreground text-muted-foreground transition-all shadow-sm"
-                          title="删除对话"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent className="w-40 animate-in zoom-in-95 duration-200">
+                          <ContextMenuItem 
+                            onClick={(e) => handleDeleteConversationItem(conv._id, e as React.MouseEvent)}
+                            className="gap-2 text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            删除对话
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     );
                   })}
                 </div>
@@ -838,23 +1203,60 @@ export function UserChatView() {
                   >
                     <ChevronLeft className="w-5 h-5 text-foreground" />
                   </button>
-                  <span className="font-semibold truncate text-foreground flex items-center gap-2 text-sm md:text-base">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     {(() => {
                       const otherId = activeConversation.participants.find((id) => id !== currentUser?.userId);
                       const otherUser = users.find((u) => u.id === otherId);
                       const displayName = otherUser?.username || activeConversation.title || `用户 ${otherId}`;
                       const isOnline = otherId ? onlineUserIds.has(otherId) : false;
+                      const avatar = otherUser?.avatar || activeConversation.participantInfo?.avatar;
                       
                       return (
                         <>
-                          {displayName}
-                          {isOnline && (
-                            <span className="w-2 h-2 bg-green-500 rounded-full" title="在线" />
-                          )}
+                          <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0 overflow-hidden border border-border shadow-sm">
+                            {avatar ? (
+                              <img src={avatar} alt={displayName} className="w-full h-full object-cover" />
+                            ) : (
+                              <User className="w-4 h-4 text-muted-foreground" />
+                            )}
+                          </div>
+                          <span className="font-semibold truncate text-foreground flex items-center gap-1.5 text-sm md:text-base">
+                            {displayName}
+                            {isOnline && (
+                              <span className="w-2 h-2 bg-green-500 rounded-full" title="在线" />
+                            )}
+                          </span>
                         </>
                       );
                     })()}
-                  </span>
+                  </div>
+
+                  {/* RTC Call Buttons */}
+                  <div className="flex items-center gap-1 md:gap-2 mr-2">
+                    <button
+                      onClick={() => handleStartCall('audio')}
+                      className="p-2 hover:bg-muted rounded-full text-muted-foreground transition-colors"
+                      title="语音通话"
+                    >
+                      <Phone className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleStartCall('video')}
+                      className="p-2 hover:bg-muted rounded-full text-muted-foreground transition-colors"
+                      title="视频通话"
+                    >
+                      <Video className="w-5 h-5" />
+                    </button>
+                  </div>
+                  
+                  {/* Desktop Fullscreen Toggle */}
+                  <button
+                    onClick={toggleFullscreen}
+                    className="hidden md:flex p-2 hover:bg-muted rounded-full text-muted-foreground transition-colors"
+                    title={isFullscreen ? '退出全屏' : '全屏'}
+                  >
+                    {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+                  </button>
                 </div>
               )}
 
@@ -882,47 +1284,92 @@ export function UserChatView() {
                             </span>
                           </div>
                         )}
-                        <div
-                          className={cn(
-                            'flex items-start gap-2 group',
-                            String(message.senderId) === String(currentUser?.userId) ? 'justify-end' : 'justify-start',
-                          )}
-                        >
-                          {/* Delete Button (Left side for user messages) */}
-                          {String(message.senderId) === String(currentUser?.userId) && (
-                              <button 
-                                  onClick={() => handleDeleteMessageItem(message._id)}
-                                  className="opacity-0 group-hover:opacity-100 p-1.5 text-muted-foreground hover:text-destructive transition-opacity self-center"
-                                  title="撤回消息"
-                              >
-                                  <Trash2 className="w-4 h-4" />
-                              </button>
-                          )}
-
                           <div
                             className={cn(
-                              'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed overflow-hidden',
-                              String(message.senderId) === String(currentUser?.userId)
-                                ? 'bg-blue-600 text-white rounded-br-md'
-                                : 'bg-gray-50 text-gray-700 rounded-bl-md',
+                              'flex items-start gap-3 group',
+                              String(message.senderId) === String(currentUser?.userId) ? 'flex-row-reverse' : 'flex-row',
                             )}
                           >
-                            {message.type === 'image' && message.fileUrl ? (
-                                <img src={message.fileUrl} alt="Image" className="max-w-[200px] md:max-w-[300px] h-auto rounded-lg object-contain" />
-                            ) : message.type === 'audio' && message.fileUrl ? (
-                                <audio controls src={message.fileUrl} className="max-w-[200px] md:max-w-[240px] h-8" />
-                            ) : (
-                                <span className="whitespace-pre-wrap break-words">{message.content}</span>
-                            )}
+                            {/* Avatar */}
+                            <div className="shrink-0 mt-0.5">
+                              {String(message.senderId) === String(currentUser?.userId) ? (
+                                <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center overflow-hidden border border-purple-200 dark:border-purple-800/50 shadow-sm">
+                                  {currentUser?.avatar ? (
+                                    <img src={currentUser.avatar} alt="Me" className="w-full h-full object-cover" />
+                                  ) : (
+                                    <User className="w-4 h-4 text-purple-600 dark:text-purple-300" />
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center overflow-hidden border border-blue-200 dark:border-blue-800/50 shadow-sm">
+                                  {(() => {
+                                    const otherId = activeConversation?.participants.find(id => id !== currentUser?.userId);
+                                    const otherUser = users.find(u => u.id === otherId);
+                                    return otherUser?.avatar ? (
+                                      <img src={otherUser.avatar} alt={otherUser.username} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <User className="w-4 h-4 text-blue-600 dark:text-blue-300" />
+                                    );
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+
+                            <ContextMenu>
+                              <ContextMenuTrigger asChild>
+                                <div
+                                  className={cn(
+                                    'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed overflow-hidden shadow-sm cursor-default active:scale-[0.98] transition-transform duration-200 touch-none select-none',
+                                    String(message.senderId) === String(currentUser?.userId)
+                                      ? 'bg-[#6b6b6b] text-white rounded-tr-none'
+                                      : 'bg-white dark:bg-zinc-800/80 text-gray-700 dark:text-gray-100 rounded-tl-none border border-gray-100 dark:border-zinc-700/50',
+                                  )}
+                                >
+                                  {message.type === 'image' && message.fileUrl ? (
+                                      <img src={message.fileUrl} alt="Image" className="max-w-[200px] md:max-w-[300px] h-auto rounded-lg object-contain" />
+                                  ) : message.type === 'audio' && message.fileUrl ? (
+                                      <WaveformPlayer src={message.fileUrl} />
+                                  ) : (
+                                      <span className="whitespace-pre-wrap break-words">{message.content}</span>
+                                  )}
+                                </div>
+                              </ContextMenuTrigger>
+                              <ContextMenuContent className="w-40 animate-in zoom-in-95 duration-200">
+                                {message.type === 'text' && (
+                                  <ContextMenuItem 
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(message.content);
+                                    }}
+                                    className="gap-2"
+                                  >
+                                    <Copy className="w-4 h-4" />
+                                    复制
+                                  </ContextMenuItem>
+                                )}
+                                {String(message.senderId) === String(currentUser?.userId) && (
+                                  <>
+                                    <ContextMenuSeparator />
+                                    <ContextMenuItem 
+                                      onClick={() => handleDeleteMessageItem(message._id)}
+                                      className="gap-2 text-destructive focus:text-destructive"
+                                    >
+                                      <RotateCcw className="w-4 h-4" />
+                                      撤回消息
+                                    </ContextMenuItem>
+                                  </>
+                                )}
+                              </ContextMenuContent>
+                            </ContextMenu>
+
+                            <div className="w-1 md:w-4 shrink-0" />
                           </div>
-                        </div>
                         {/* Read status - Only show for the last message from current user */}
                         {String(message.senderId) === String(currentUser?.userId) && index === messages.length - 1 && (
                           <div className="flex justify-end pr-2 -mt-3 mb-4">
                             <span className="text-[10px] text-muted-foreground">
                               {message.isRead ? (
-                                <span className="text-blue-500">
-                                  已读 {message.readAt ? new Date(message.readAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }) : ''}
+                                <span className="text-[#f2a68d]">
+                                  已读 {message.readAt ? formatChatTime(message.readAt) : ''}
                                 </span>
                               ) : (
                                 '未读'
@@ -949,7 +1396,7 @@ export function UserChatView() {
                 }
 
                 return (
-                  <div className="flex-none border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card z-10">
+                  <div className="flex-none border-t border-border p-4 pb-0 md:pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card z-10">
                     <input 
                         type="file" 
                         accept="image/*" 
@@ -959,17 +1406,22 @@ export function UserChatView() {
                     />
 
                     {isRecording ? (
-                        <div className="flex items-center gap-3 h-12 bg-red-50 rounded-2xl px-4 animate-in fade-in">
-                            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse" />
-                            <span className="flex-1 font-mono text-red-600 font-medium">
-                                {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
-                            </span>
-                            <button onClick={handleCancelRecording} className="p-2 text-muted-foreground hover:text-foreground" title="取消">
-                                <X className="w-5 h-5" />
-                            </button>
-                            <button onClick={handleStopRecording} className="p-2 text-red-600 bg-red-100 rounded-full hover:bg-red-200" title="发送">
-                                <Send className="w-5 h-5" />
-                            </button>
+                        <div className="flex items-center gap-3 h-12 bg-red-50 dark:bg-red-950/20 rounded-2xl px-4 animate-in fade-in border border-red-100 dark:border-red-900/30">
+                            <div className="flex-1 flex items-center gap-3 min-w-0">
+                              <div className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                              {mediaStream && <div className="flex-1 min-w-0 h-8"><AudioVisualizer stream={mediaStream} /></div>}
+                              <span className="font-mono text-red-600 dark:text-red-400 font-medium shrink-0">
+                                  {Math.floor(recordingTime / 60)}:{(recordingTime % 60).toString().padStart(2, '0')}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button onClick={handleCancelRecording} className="p-2 text-muted-foreground hover:text-foreground transition-colors" title="取消">
+                                  <X className="w-5 h-5" />
+                              </button>
+                              <button onClick={handleStopRecording} className="p-2 text-red-600 bg-red-100 dark:bg-red-900/40 rounded-full hover:bg-red-200 transition-colors" title="发送">
+                                  <Send className="w-5 h-5" />
+                              </button>
+                            </div>
                         </div>
                     ) : (
                         <div className="flex items-end gap-2">
@@ -1006,7 +1458,7 @@ export function UserChatView() {
                             className={cn(
                               'h-12 w-12 rounded-2xl flex items-center justify-center transition shrink-0',
                               canSend && activeConversation
-                                ? 'bg-primary text-primary-foreground shadow-md hover:shadow-lg'
+                                ? 'bg-[#6b6b6b] text-white shadow-md hover:shadow-lg'
                                 : 'bg-muted text-muted-foreground cursor-not-allowed',
                             )}
                           >
@@ -1021,6 +1473,59 @@ export function UserChatView() {
           </div>
         </div>
       </div>
+
+      {/* RTC Call Overlay */}
+      {isJoined && (
+        <RtcCallOverlay
+          isJoined={isJoined}
+          mode={rtcMode}
+          localAudioTrack={localAudioTrack}
+          localVideoTrack={localVideoTrack}
+          remoteUsers={remoteUsers}
+          otherUserName={(() => {
+            const otherId = activeConversation?.participants.find(id => id !== currentUser?.userId);
+            const otherUser = users.find(u => u.id === otherId);
+            return otherUser?.username;
+          })()}
+          otherUserAvatar={(() => {
+            const otherId = activeConversation?.participants.find(id => id !== currentUser?.userId);
+            const otherUser = users.find(u => u.id === otherId);
+            return otherUser?.avatar;
+          })()}
+          onLeave={handleLeaveCall}
+          onToggleAudio={toggleAudio}
+          onToggleVideo={toggleVideo}
+          setLocalVideoPlayer={setLocalVideoPlayer}
+          setRemoteVideoPlayer={setRemoteVideoPlayer}
+        />
+      )}
+      <OutgoingCallModal
+        open={!!pendingOutgoingCall && !isJoined}
+        calleeName={(() => {
+          if (!pendingOutgoingCall) return undefined;
+          const target = users.find((u) => u.id === pendingOutgoingCall.targetUserId);
+          return target?.username;
+        })()}
+        calleeAvatar={(() => {
+          if (!pendingOutgoingCall) return undefined;
+          const target = users.find((u) => u.id === pendingOutgoingCall.targetUserId);
+          return target?.avatar;
+        })()}
+        mode={pendingOutgoingCall?.mode || 'audio'}
+        onCancel={handleCancelOutgoingCall}
+      />
+      <IncomingCallModal
+        open={!!incomingCall}
+        callerName={incomingCall?.callerName}
+        callerAvatar={(() => {
+          if (!incomingCall) return undefined;
+          const caller = users.find((u) => u.id === incomingCall.callerId);
+          return caller?.avatar;
+        })()}
+        mode={incomingCall?.mode || 'audio'}
+        onAccept={handleAcceptIncomingCall}
+        onReject={handleRejectIncomingCall}
+      />
     </div>
   );
 }

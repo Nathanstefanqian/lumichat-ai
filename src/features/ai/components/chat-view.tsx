@@ -3,13 +3,10 @@ import {
   Sparkles,
   Send,
   Bot,
-  User,
   Menu,
   X,
   BrainCircuit,
   Globe,
-  ChevronDown,
-  ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
   Code,
@@ -17,6 +14,14 @@ import {
   MessageSquare,
   Languages,
   PenTool,
+  Image,
+  Eye,
+  Zap,
+  Clock,
+  Timer,
+  Settings2,
+  Sliders,
+  Loader2,
 } from 'lucide-react';
 
 const TEMPERATURE_MODES = [
@@ -25,57 +30,94 @@ const TEMPERATURE_MODES = [
   { label: '通用对话', value: 1.3, icon: MessageSquare, color: 'text-purple-500' },
   { label: '翻译', value: 1.3, icon: Languages, color: 'text-orange-500' },
   { label: '创意类写作/诗歌创作', value: 1.5, icon: PenTool, color: 'text-pink-500' },
+  { label: '自定义温度', value: 0.7, icon: Settings2, color: 'text-indigo-500', isCustom: true },
+];
+
+const MODEL_MODES = [
+  { name: 'DeepSeek-Chat', value: 'deepseek-chat', icon: Bot, desc: '通用智能对话' },
+  { name: 'DeepSeek-Reasoner', value: 'deepseek-reasoner', icon: Sparkles, desc: '强化推理 (思考模型)' },
+  { name: 'Doubao-Seed-2.0-pro', value: 'doubao-seed-2.0-pro', icon: BrainCircuit, desc: '火山方舟旗舰 (Coding Plan)' },
+  { name: 'Doubao-Seed-Code', value: 'doubao-seed-code', icon: Code, desc: '豆包编程模型 (Coding Plan)' },
+  { name: 'Kimi-K2.5', value: 'kimi-k2.5', icon: Zap, desc: '月之暗面最新版 (Coding Plan)' },
+  { name: 'GLM-4.7', value: 'glm-4.7', icon: MessageSquare, desc: '智谱旗舰模型 (Coding Plan)' },
+  { name: 'DeepSeek-V3.2', value: 'deepseek-v3.2', icon: Bot, desc: '深度求索 V3.2 (Coding Plan)' },
+  { name: 'Doubao-Seed-2.0-lite', value: 'doubao-seed-2.0-lite', icon: Zap, desc: '轻量高性能 (Coding Plan)' },
+  { name: 'Qwen 3.5 (硅基流动)', value: 'Qwen/Qwen3.5-397B-A17B', icon: BrainCircuit, desc: '通义千问最新旗舰 MoE' },
+  { name: 'MiniMax M2.5', value: 'minimax-m2.5', icon: Zap, desc: '高性能代码 & 逻辑专家 (Coding Plan)' },
+  { name: 'Qwen-VL (视觉)', value: 'Qwen/Qwen2.5-VL-72B-Instruct', icon: Eye, desc: '视觉理解 & 识图回答' },
 ];
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+
+function OpacityText({ content }: { content: string }) {
+  // 将内容拆分为字符数组，包括空格
+  const chars = Array.from(content);
+  return (
+    <span className="whitespace-pre-wrap break-words text-left">
+      {chars.map((char, index) => (
+        <span
+          key={index}
+          className="char-fade"
+          style={{ animationDelay: `${index * 0.03}s` }}
+        >
+          {char}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function RealtimeTimer({ startTime }: { startTime: number }) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsed(Date.now() - startTime);
+    }, 100);
+    return () => clearInterval(timer);
+  }, [startTime]);
+
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] text-primary/50 font-medium animate-pulse">
+      <Timer className="w-3 h-3" />
+      <span>正在思考... {(elapsed / 1000).toFixed(1)}s</span>
+    </div>
+  );
+}
+
 import { streamChat } from '../api/stream-chat';
 import { generateAiTitle } from '../api/generate-title';
 import { createAiConversation } from '../api/create-conversation';
 import { deleteConversation } from '../api/delete-conversation';
 import { getAiMessages } from '../api/get-messages';
+import { uploadMedia } from '../../tools/api/media';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/stores/chat';
 import { useAuthStore } from '@/stores/auth';
 import { ConversationList } from './conversation-list';
 import { formatMessageTime, shouldShowTimestamp } from '@/lib/date-utils';
 
-function ReasoningBlock({ content }: { content: string }) {
-  const [expanded, setExpanded] = useState(true);
-  if (!content) return null;
-  return (
-    <div className="border-l-2 border-purple-200 dark:border-purple-700/50 pl-4 py-2 my-2 bg-purple-50/30 dark:bg-purple-900/20 rounded-r-md">
-      <div 
-        className="flex items-center gap-2 cursor-pointer text-purple-700 dark:text-purple-300 hover:text-purple-900 dark:hover:text-purple-100 text-xs font-medium mb-1 select-none"
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-        <BrainCircuit className="w-3 h-3" />
-        <span>深度思考过程</span>
-      </div>
-      {expanded && (
-        <div className="text-gray-600 dark:text-gray-300 text-xs whitespace-pre-wrap font-mono leading-relaxed opacity-90">
-          {content}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function ChatView() {
   const user = useAuthStore((state) => state.user);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [enableThinking, setEnableThinking] = useState(false);
   const [enableSearch, setEnableSearch] = useState(false);
   const [temperatureMode, setTemperatureMode] = useState(TEMPERATURE_MODES[2]); // Default: General Conversation
+  const [selectedModel, setSelectedModel] = useState(MODEL_MODES[0]);
   const [showTempMenu, setShowTempMenu] = useState(false);
+  const [showModelMenu, setShowModelMenu] = useState(false);
+  const [customTemp, setCustomTemp] = useState(0.7);
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFileUrl, setUploadedFileUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const listRef = useRef<HTMLDivElement | null>(null);
   const isAutoScrollRef = useRef(true);
   const controllerRef = useRef<AbortController | null>(null);
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   const conversations = useChatStore((state) => state.conversations);
   const activeConversationId = useChatStore(
@@ -99,6 +141,14 @@ export function ChatView() {
   const removeConversation = useChatStore((state) => state.removeConversation);
   const clearAllConversations = useChatStore((state) => state.clearAllConversations);
 
+  const TypingDots = () => (
+    <div className="flex items-center gap-1.5 px-1 py-1.5">
+      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-[pulse_1.5s_infinite_0s] opacity-30" />
+      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-[pulse_1.5s_infinite_0.3s] opacity-30" />
+      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-[pulse_1.5s_infinite_0.6s] opacity-30" />
+    </div>
+  );
+
   useEffect(() => {
     // 移除自动创建对话的逻辑
     // 如果没有对话，不做任何操作，让用户手动创建
@@ -118,23 +168,24 @@ export function ChatView() {
     return activeConversation?.messages.filter((m) => m.role === 'user') || [];
   }, [activeConversation?.messages]);
 
-  // 当选中对话且消息为空时，尝试从服务器加载消息
   useEffect(() => {
-    if (!activeConversationId) return;
+    if (!activeConversationId || activeConversationId === 'new') return;
 
-    const conversation = conversations.find(c => c.id === activeConversationId);
-    if (conversation && conversation.messages.length === 0) {
-      getAiMessages(activeConversationId)
-        .then((messages) => {
-          if (messages.length > 0) {
-            setMessages(activeConversationId, messages);
-          }
-        })
-        .catch((err) => {
-          console.error('Failed to fetch messages', err);
-        });
-    }
-  }, [activeConversationId, conversations, setMessages]);
+    // 强制每次切换都尝试从后端同步最新的消息，以防本地状态丢失或未同步
+    setIsLoadingMessages(true);
+    getAiMessages(activeConversationId)
+      .then((messages) => {
+        if (messages && messages.length > 0) {
+          setMessages(activeConversationId, messages);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch messages', err);
+      })
+      .finally(() => {
+        setIsLoadingMessages(false);
+      });
+  }, [activeConversationId, setMessages]);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isStreaming, [
     input,
@@ -191,15 +242,68 @@ export function ChatView() {
     }
   };
 
-  const updateAssistant = (conversationId: string, messageId: string, chunk: string) => {
-    appendMessage(conversationId, messageId, chunk);
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 检查是否是图片 (视觉模型支持多种图片格式)
+    const supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/tiff'];
+    if (!supportedTypes.includes(file.type) && !file.type.startsWith('image/')) {
+      alert('目前仅支持上传图片进行视觉分析');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const res = await uploadMedia(file);
+      if (res && res.url) {
+        setUploadedFileUrl(res.url);
+        // 如果上传了图片，自动切换到视觉模型
+        if (selectedModel.value !== 'Qwen/Qwen2.5-VL-7B-Instruct') {
+          setSelectedModel(MODEL_MODES[2]);
+        }
+      }
+    } catch (err) {
+      console.error('上传失败:', err);
+      alert('上传失败，请稍后重试');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handlePaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        const file = items[i].getAsFile();
+        if (file) {
+          setUploading(true);
+          try {
+            const res = await uploadMedia(file);
+            if (res && res.url) {
+              setUploadedFileUrl(res.url);
+              if (selectedModel.value !== 'Qwen/Qwen2.5-VL-72B-Instruct') {
+                setSelectedModel(MODEL_MODES[2]);
+              }
+            }
+          } catch (err) {
+            console.error('粘贴上传失败:', err);
+          } finally {
+            setUploading(false);
+          }
+        }
+      }
+    }
   };
 
   const handleSend = async () => {
     const content = input.trim();
-    if (!content || isStreaming) {
-      return;
-    }
+    if (!content && !uploadedFileUrl) return; // 允许只传图不传文字
+    if (isStreaming) return;
+    
     let currentConversationId = activeConversationId === 'new' ? null : activeConversationId;
     
     // 如果没有当前对话，尝试创建一个新的远程对话
@@ -207,69 +311,53 @@ export function ChatView() {
       // 立即设置 loading 状态
       setIsStreaming(true);
       
-      let finalTitle = content.slice(0, 20) || '新对话';
+      let finalTitle = content ? content.slice(0, 20) : '图片对话';
       
       try {
-        console.log('Generating AI title for:', content);
-        // Step 1: 尝试生成 AI 标题
-        const titleRes = await generateAiTitle(content);
-        if (titleRes && titleRes.title && titleRes.title.trim()) {
-          finalTitle = titleRes.title.trim();
-          console.log('AI Title generated:', finalTitle);
-        } else {
-          console.warn('AI Title empty, using default');
+        if (content) {
+          console.log('Generating AI title for:', content);
+          // Step 1: 尝试生成 AI 标题
+          const titleRes = await generateAiTitle(content);
+          if (titleRes && titleRes.title && titleRes.title.trim()) {
+            finalTitle = titleRes.title.trim();
+          }
         }
       } catch (error) {
         console.error('Title generation failed, using fallback:', finalTitle, error);
-        // 出错时保持使用 content slice
       }
       
       try {
         // Step 2: 创建对话
-        console.log('Creating conversation with title:', finalTitle);
         const newConversation = await createAiConversation(finalTitle);
-        
-        // 双重检查：如果后端返回的标题是默认值，但我们发的是自定义值，强制更新本地
-        if (newConversation.title === 'AI 对话' && finalTitle !== 'AI 对话') {
-             newConversation.title = finalTitle;
-        }
-
         upsertConversation(newConversation);
         setActiveConversationId(newConversation.id);
         currentConversationId = newConversation.id;
-        
       } catch (error) {
         console.error('Failed to create conversation', error);
         setIsStreaming(false); 
-        // 回退到本地创建
-        const id = Date.now().toString();
-        upsertConversation({
-          id,
-          title: finalTitle, // 使用我们计算出的标题
-          createdAt: Date.now(),
-          messages: [],
-        });
-        setActiveConversationId(id);
-        currentConversationId = id;
+        return;
       }
     }
     
+    const currentImageUrl = uploadedFileUrl;
     setInput('');
+    setUploadedFileUrl(null); // 清空已上传图片状态
     setIsStreaming(true);
     isAutoScrollRef.current = true;
     const userMessageId = `user-${Date.now()}`;
     const assistantId = `assistant-${Date.now()}`;
     
-    // 添加用户消息（状态：sending）
+    // 添加用户消息
     addMessage(currentConversationId, {
       id: userMessageId,
       role: 'user',
       content,
+      fileUrl: currentImageUrl || undefined,
       status: 'sending',
       createdAt: Date.now(),
     });
     
-    // 添加 AI 消息占位符（状态：streaming）
+    // 添加 AI 消息占位符
     addMessage(currentConversationId, {
       id: assistantId,
       role: 'assistant',
@@ -281,63 +369,44 @@ export function ChatView() {
     const controller = new AbortController();
     controllerRef.current = controller;
 
-    try {
-      await streamChat(
-        content,
-        currentConversationId,
-        enableThinking,
-        enableSearch,
-        temperatureMode.value,
-        (conversationId) => {
-          if (!conversationId) {
-            return;
-          }
-          const state = useChatStore.getState();
-          const existing = state.conversations.find(
-            (item) => item.id === conversationId,
-          );
-          if (!existing) {
-            upsertConversation({
-              id: conversationId,
-              title: 'AI 对话',
-              createdAt: Date.now(),
-              messages: [],
-            });
-          }
-          if (state.activeConversationId !== conversationId) {
-            setActiveConversationId(conversationId);
-          }
-        },
-        (chunk) => {
-          updateAssistant(currentConversationId, assistantId, chunk);
-        },
-        (thinking) => {
-          appendReasoning(currentConversationId, assistantId, thinking);
-        },
-        controller.signal,
-      );
-      
-      // 流式传输成功完成，标记消息为 synced
-      if (currentConversationId) {
-        setMessageStatus(currentConversationId, userMessageId, 'synced');
-        setMessageStatus(currentConversationId, assistantId, 'synced');
-        
-        // 我们不再立即重新获取消息列表和对话列表，
-        // 而是完全信任前端的状态（Optimistic UI），
-        // 只有在用户刷新页面或重新进入时，才从服务器同步最新数据。
-        // 这避免了服务器数据写入延迟导致的“消息消失”或“列表清空”问题。
-      }
-    } catch {
-      // 流式传输失败
-      if (currentConversationId) {
-        setMessageStatus(currentConversationId, userMessageId, 'failed');
-        setMessageStatus(currentConversationId, assistantId, 'failed');
-        setMessageContent(
+      try {
+        await streamChat(
+          content,
           currentConversationId,
-          assistantId,
-          '\n\n请求失败，请稍后重试。',
+          selectedModel.value === 'deepseek-reasoner',
+          enableSearch,
+          temperatureMode.isCustom ? customTemp : temperatureMode.value,
+          (conversationId: string) => {
+            if (!conversationId) return;
+            const state = useChatStore.getState();
+            const existing = state.conversations.find((item) => item.id === conversationId);
+            if (!existing) {
+              getAiMessages(conversationId).then(messages => {
+                setMessages(conversationId, messages);
+              });
+            }
+          },
+          (chunk: string) => {
+            appendMessage(currentConversationId!, assistantId, chunk);
+          },
+          (thinking: string) => {
+            appendReasoning(currentConversationId!, assistantId, thinking);
+          },
+          selectedModel.value,
+          currentImageUrl || undefined,
+          controller.signal,
         );
-      }
+        // 获取最新的消息状态（包含后端返回的耗时）
+        getAiMessages(currentConversationId).then(messages => {
+          setMessages(currentConversationId!, messages);
+        });
+        setMessageStatus(currentConversationId, assistantId, 'synced');
+        setMessageStatus(currentConversationId, userMessageId, 'synced');
+      } catch (error: any) {
+      if (error.name === 'AbortError') return;
+      console.error('Chat error:', error);
+      setMessageContent(currentConversationId, assistantId, '抱歉，发生了错误，请稍后再试。');
+      setMessageStatus(currentConversationId, assistantId, 'failed');
     } finally {
       setIsStreaming(false);
       controllerRef.current = null;
@@ -390,11 +459,10 @@ export function ChatView() {
   };
 
   return (
-    <div className="flex-1 overflow-hidden relative bg-card">
+    <div className="flex-1 h-full overflow-hidden relative bg-card">
       <div className="w-full h-full flex flex-col">
         <div className="text-card-foreground flex-1 min-h-0 flex flex-col">
           <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-            {/* Desktop Sidebar */}
             <div
               className={cn(
                 'hidden md:flex border-r border-border flex-col min-h-0 transition-all duration-300 ease-in-out',
@@ -425,9 +493,14 @@ export function ChatView() {
                 >
                   <Menu className="w-5 h-5 text-foreground" />
                 </button>
-                <span className="font-semibold truncate text-foreground">
-                  {activeConversation?.title || '对话'}
-                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800/50 shadow-sm">
+                    <Bot className="w-4 h-4 text-blue-600 dark:text-blue-300" />
+                  </div>
+                  <span className="font-semibold truncate text-foreground">
+                    {activeConversation?.title || 'AI 对话'}
+                  </span>
+                </div>
               </div>
 
               {/* Desktop Header */}
@@ -443,17 +516,27 @@ export function ChatView() {
                     <PanelLeftOpen className="w-4 h-4" />
                   )}
                 </button>
-                <h2 className="font-medium text-sm text-foreground/80">
-                  {activeConversation?.title || '新对话'}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800/50 shadow-sm">
+                    <Bot className="w-3.5 h-3.5 text-blue-600 dark:text-blue-300" />
+                  </div>
+                  <h2 className="font-medium text-sm text-foreground/80">
+                    {activeConversation?.title || '新对话'}
+                  </h2>
+                </div>
               </div>
 
               <div
                 ref={listRef}
                 onScroll={handleScroll}
-                className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4 scrollbar-hidden"
+                className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 space-y-4"
               >
-                {!activeConversation || activeConversation.messages.length === 0 ? (
+                {isLoadingMessages ? (
+                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-500/50" />
+                    <p className="text-sm">正在同步云端记录...</p>
+                  </div>
+                ) : !activeConversation || activeConversation.messages.length === 0 ? (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4">
                     <Sparkles className="w-12 h-12 text-muted-foreground/60" />
                     <p>开始一次新的对话...</p>
@@ -475,59 +558,101 @@ export function ChatView() {
                     <div
                       id={`message-${message.id}`}
                       className={cn(
-                        'flex items-start gap-3 scroll-mt-20',
-                        message.role === 'user'
-                          ? 'justify-end'
-                          : 'justify-start',
+                        'flex w-full mb-6 animate-in fade-in slide-in-from-bottom-2 duration-300',
+                        message.role === 'user' ? 'justify-end' : 'justify-start',
                       )}
                     >
-                      {message.role === 'assistant' && (
-                        <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                          <Bot className="w-5 h-5 text-blue-600 dark:text-blue-300" />
-                        </div>
-                      )}
                       <div
                         className={cn(
-                          'max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed',
-                          message.role === 'user'
-                            ? 'bg-blue-600 text-white rounded-br-md'
-                            : 'bg-gray-50 dark:bg-zinc-800/80 text-gray-700 dark:text-gray-100 rounded-bl-md',
+                          'flex max-w-[85%] md:max-w-[75%] gap-3',
+                          message.role === 'user' ? 'flex-row-reverse' : 'flex-row',
                         )}
                       >
-                        {message.role === 'assistant' ? (
-                        <div className="flex flex-col gap-1 min-w-0">
-                          {message.reasoning_content && (
-                            <ReasoningBlock content={message.reasoning_content} />
-                          )}
-                          {message.content ? (
-                            <div className="markdown-body">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                {message.content}
-                              </ReactMarkdown>
+                        {/* Avatar */}
+                        <div className="flex-none pt-1">
+                          {message.role === 'user' ? (
+                            <div className="w-8 h-8 rounded-full overflow-hidden border border-border bg-muted">
+                              <img
+                                src={user?.avatar || '/logo.jpg'}
+                                alt="User"
+                                className="w-full h-full object-cover"
+                              />
                             </div>
                           ) : (
-                            <span className="typing-dots" aria-label="typing">
-                              <span />
-                              <span />
-                              <span />
-                            </span>
+                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white shadow-sm overflow-hidden">
+                              <img src="/logo.jpg" alt="Lumi" className="w-full h-full object-cover" />
+                            </div>
                           )}
                         </div>
-                      ) : (
-                          <span className="whitespace-pre-wrap">
-                            {message.content}
-                          </span>
-                        )}
+
+                        {/* Message Content Area */}
+                        <div className={cn(
+                          "flex flex-col gap-1.5",
+                          message.role === 'user' ? "items-end" : "items-start"
+                        )}>
+                          {/* Image - Separated from bubble (Both user and assistant) */}
+                          {message.fileUrl && (
+                            <div className="mb-1">
+                              <img 
+                                src={message.fileUrl} 
+                                alt="Content" 
+                                className="rounded-2xl max-w-full max-h-80 object-cover cursor-pointer hover:opacity-95 transition-all shadow-sm border border-border/50"
+                                onClick={() => window.open(message.fileUrl, '_blank')}
+                              />
+                            </div>
+                          )}
+
+                          {/* Text Bubble */}
+                          <div
+                            className={cn(
+                              'relative px-4 py-2.5 rounded-2xl text-[14.5px] leading-relaxed shadow-sm transition-all',
+                              message.role === 'user'
+                                ? 'bg-[#f4f4f4] dark:bg-zinc-800 text-gray-800 dark:text-zinc-200 rounded-tr-none'
+                                : 'bg-white dark:bg-zinc-900 border border-border/50 text-gray-800 dark:text-zinc-200 rounded-tl-none',
+                            )}
+                          >
+                            {message.role === 'assistant' ? (
+                              <div className="prose dark:prose-invert prose-sm max-w-none prose-p:leading-relaxed prose-pre:bg-zinc-950 prose-pre:border prose-pre:border-zinc-800">
+                                {message.reasoning_content && (
+                                  <div className="mb-3 p-3 bg-muted/30 rounded-xl border-l-2 border-primary/30 italic text-muted-foreground text-xs">
+                                    <div className="flex items-center gap-1.5 mb-1 not-italic font-medium text-primary/70">
+                                      <BrainCircuit className="w-3 h-3" />
+                                      <span>深度思考中...</span>
+                                    </div>
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                      {message.reasoning_content}
+                                    </ReactMarkdown>
+                                  </div>
+                                )}
+                                {message.content ? (
+                                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {message.content}
+                                  </ReactMarkdown>
+                                ) : !message.fileUrl ? (
+                                  <TypingDots />
+                                ) : null}
+                              </div>
+                            ) : (
+                              <OpacityText content={message.content} />
+                            )}
+                          </div>
+
+                          {/* Time Display Outside Bubble (Only for Assistant) */}
+                          {message.role === 'assistant' && (
+                            <div className="px-1 flex items-center gap-2 min-h-[16px]">
+                              {message.status === 'streaming' && (
+                                <RealtimeTimer startTime={message.createdAt} />
+                              )}
+                              {message.duration && message.status !== 'streaming' && (
+                                <div className="flex items-center gap-1.5 text-[10px] text-primary/60 font-bold select-none animate-in fade-in zoom-in duration-1000 bg-primary/5 px-2 py-0.5 rounded-full border border-primary/10">
+                                  <Clock className="w-2.5 h-2.5 text-primary/70" />
+                                  <span>生成耗时: {(message.duration / 1000).toFixed(2)}s</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      {message.role === 'user' && (
-                        <div className="w-9 h-9 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center overflow-hidden">
-                          {user?.avatar ? (
-                            <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
-                          ) : (
-                            <User className="w-5 h-5 text-purple-600 dark:text-purple-300" />
-                          )}
-                        </div>
-                      )}
                     </div>
                     </Fragment>
                   );})
@@ -535,51 +660,71 @@ export function ChatView() {
               </div>
 
               {/* Input Area */}
-              <div className="flex-none border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-card z-10">
-                <div className="flex items-end gap-3">
+              <div className="flex-none border-t border-border p-4 bg-card z-10 safe-area-bottom">
+                <div className="flex items-end gap-3 mb-[env(safe-area-inset-bottom)]">
                   <div className="flex-1 flex flex-col gap-2">
-                    <div className="flex items-center gap-2 px-1">
-                      <div className="relative">
+                    {/* Image Preview - Moved above buttons */}
+                    {uploadedFileUrl && (
+                      <div className="px-1 animate-in fade-in slide-in-from-bottom-2">
+                        <div className="relative w-20 h-20 group/preview bg-background border border-border rounded-xl shadow-sm p-1">
+                          <img 
+                            src={uploadedFileUrl} 
+                            alt="Upload preview" 
+                            className="w-full h-full object-cover rounded-lg"
+                          />
+                          <button
+                            onClick={() => setUploadedFileUrl(null)}
+                            className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 px-1 overflow-x-visible relative z-30">
+                      {/* Model Selector */}
+                      <div className="relative shrink-0">
                         <button
-                          onClick={() => setShowTempMenu(!showTempMenu)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowModelMenu(!showModelMenu);
+                            setShowTempMenu(false);
+                          }}
                           className={cn(
-                            'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors border whitespace-nowrap',
                             'bg-white dark:bg-zinc-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800'
                           )}
-                          title={`当前模式: ${temperatureMode.label} (Temperature: ${temperatureMode.value})`}
                         >
-                          <temperatureMode.icon className={cn("w-3.5 h-3.5", temperatureMode.color)} />
-                          {temperatureMode.label}
+                          <selectedModel.icon className="w-3 h-3 text-blue-500" />
+                          {selectedModel.name}
                         </button>
                         
-                        {showTempMenu && (
+                        {showModelMenu && (
                           <>
-                            <div 
-                              className="fixed inset-0 z-30" 
-                              onClick={() => setShowTempMenu(false)}
-                            />
-                            <div className="absolute bottom-full mb-2 left-0 w-56 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg z-40 py-1 overflow-hidden">
+                            <div className="fixed inset-0 z-[40]" onClick={() => setShowModelMenu(false)} />
+                            <div className="absolute bottom-full mb-2 left-0 w-64 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-xl z-[50] py-1 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
                               <div className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-muted/50 border-b border-border mb-1">
-                                选择对话模式
+                                选择 AI 模型
                               </div>
-                              {TEMPERATURE_MODES.map((mode) => (
+                              {MODEL_MODES.map((mode) => (
                                 <button
-                                  key={mode.label}
+                                  key={mode.value}
                                   onClick={() => {
-                                    setTemperatureMode(mode);
-                                    setShowTempMenu(false);
+                                    setSelectedModel(mode);
+                                    setShowModelMenu(false);
                                   }}
                                   className={cn(
                                     "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors",
-                                    temperatureMode.value === mode.value && temperatureMode.label === mode.label 
-                                      ? "bg-gray-50 dark:bg-zinc-800 font-medium" 
+                                    selectedModel.value === mode.value 
+                                      ? "bg-gray-50 dark:bg-zinc-800 font-medium text-blue-600 dark:text-blue-400" 
                                       : "text-gray-600 dark:text-gray-400"
                                   )}
                                 >
-                                  <mode.icon className={cn("w-3.5 h-3.5", mode.color)} />
-                                  <div className="flex flex-col items-start gap-0.5">
-                                    <span>{mode.label}</span>
-                                    <span className="text-[10px] text-muted-foreground opacity-70">Temperature: {mode.value.toFixed(1)}</span>
+                                  <mode.icon className="w-3.5 h-3.5" />
+                                  <div className="flex flex-col items-start">
+                                    <span>{mode.name}</span>
+                                    <span className="text-[10px] text-muted-foreground opacity-70">{mode.desc}</span>
                                   </div>
                                 </button>
                               ))}
@@ -587,47 +732,149 @@ export function ChatView() {
                           </>
                         )}
                       </div>
+
+                      {/* Temperature Selector */}
+                      <div className="relative shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowTempMenu(!showTempMenu);
+                            setShowModelMenu(false);
+                          }}
+                          className={cn(
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors border whitespace-nowrap',
+                            'bg-white dark:bg-zinc-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800'
+                          )}
+                        >
+                          <temperatureMode.icon className={cn("w-3 h-3", temperatureMode.color)} />
+                          {temperatureMode.isCustom ? `温度: ${customTemp.toFixed(1)}` : temperatureMode.label}
+                        </button>
+                        
+                        {showTempMenu && (
+                          <>
+                            <div className="fixed inset-0 z-[40]" onClick={() => setShowTempMenu(false)} />
+                            <div className="absolute bottom-full mb-2 left-0 w-56 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-xl z-[50] py-1 overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                              <div className="px-3 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider bg-muted/50 border-b border-border mb-1">
+                                选择参数模式
+                              </div>
+                              {TEMPERATURE_MODES.map((mode) => (
+                                <button
+                                  key={mode.label}
+                                  onClick={() => {
+                                    if (!mode.isCustom) {
+                                      setTemperatureMode(mode);
+                                      setShowTempMenu(false);
+                                    } else {
+                                      setTemperatureMode(mode);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "w-full text-left px-3 py-2 text-xs flex items-center gap-2 hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors",
+                                    (temperatureMode.label === mode.label)
+                                      ? "bg-gray-50 dark:bg-zinc-800 font-medium text-blue-600 dark:text-blue-400" 
+                                      : "text-gray-600 dark:text-gray-400"
+                                  )}
+                                >
+                                  <mode.icon className={cn("w-3.5 h-3.5", mode.color)} />
+                                  <div className="flex flex-col items-start gap-0.5">
+                                    <span>{mode.label}</span>
+                                    <span className="text-[10px] text-muted-foreground opacity-70">
+                                      {mode.isCustom ? `当前: ${customTemp.toFixed(1)}` : `Temperature: ${mode.value.toFixed(1)}`}
+                                    </span>
+                                  </div>
+                                </button>
+                              ))}
+                              
+                              {temperatureMode.isCustom && (
+                                <div className="px-3 py-3 border-t border-border mt-1 bg-muted/20">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[10px] font-bold text-primary/70 flex items-center gap-1">
+                                      <Sliders className="w-2.5 h-2.5" />
+                                      调节温度
+                                    </span>
+                                    <span className="text-[10px] font-mono bg-primary/10 px-1.5 py-0.5 rounded text-primary">
+                                      {customTemp.toFixed(1)}
+                                    </span>
+                                  </div>
+                                  <input 
+                                    type="range"
+                                    min="0"
+                                    max="2"
+                                    step="0.1"
+                                    value={customTemp}
+                                    onChange={(e) => setCustomTemp(parseFloat(e.target.value))}
+                                    className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                                  />
+                                  <div className="flex justify-between mt-1 text-[8px] text-muted-foreground font-medium px-0.5">
+                                    <span>严谨 (0.0)</span>
+                                    <span>创造 (2.0)</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+
                       <button
                         onClick={() => setEnableSearch(!enableSearch)}
                         className={cn(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
+                          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors border whitespace-nowrap shrink-0',
                           enableSearch
                             ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800'
                             : 'bg-white dark:bg-zinc-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800',
                         )}
                       >
-                        <Globe className="w-3.5 h-3.5" />
-                        知识库搜索
-                      </button>
-                      <button
-                        onClick={() => setEnableThinking(!enableThinking)}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors border',
-                          enableThinking
-                            ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800'
-                            : 'bg-white dark:bg-zinc-900 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-zinc-700 hover:bg-gray-50 dark:hover:bg-zinc-800',
-                        )}
-                      >
-                        <BrainCircuit className="w-3.5 h-3.5" />
-                        深度思考
+                        <Globe className="w-3 h-3" />
+                        联网搜索
                       </button>
                     </div>
-                    <textarea
-                      value={input}
-                      onChange={(event) => setInput(event.target.value)}
-                      onKeyDown={handleKeyDown}
-                      placeholder="输入你的问题，Enter 发送，Shift+Enter 换行"
-                      className="w-full resize-none rounded-2xl border border-input bg-background px-4 py-3 text-base md:text-sm focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring"
-                      rows={2}
-                      disabled={isStreaming}
-                    />
+
+                    <div className="relative group/input">
+                      <div className="flex items-center gap-2 bg-background border border-input rounded-2xl focus-within:ring-2 focus-within:ring-ring focus-within:border-ring transition-all pr-2">
+                        <textarea
+                          value={input}
+                          onChange={(event) => setInput(event.target.value)}
+                          onKeyDown={handleKeyDown}
+                          onPaste={handlePaste}
+                          placeholder={uploading ? "图片上传中..." : "和我说话吧~"}
+                          className="flex-1 resize-none bg-transparent px-4 py-3 text-[13px] md:text-sm focus:outline-none min-h-[48px]"
+                          rows={Math.min(5, Math.max(1, input.split('\n').length))}
+                          disabled={isStreaming || uploading}
+                        />
+                        <div className="flex items-center gap-1 self-end pb-2">
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            accept="image/*"
+                            className="hidden"
+                          />
+                          <button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isStreaming || uploading}
+                            className={cn(
+                              "p-2 rounded-xl hover:bg-muted transition-colors text-muted-foreground",
+                              uploadedFileUrl && "text-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                            )}
+                            title="上传图片"
+                          >
+                            {uploading ? (
+                              <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Image className="w-5 h-5" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                   <button
                     onClick={handleSend}
-                    disabled={!canSend}
+                    disabled={!canSend && !uploadedFileUrl}
                     className={cn(
-                      'h-12 w-12 rounded-2xl flex items-center justify-center transition',
-                      canSend
+                      'h-12 w-12 rounded-2xl flex items-center justify-center transition shrink-0 mb-0.5',
+                      (canSend || uploadedFileUrl) && !isStreaming
                         ? 'bg-blue-600 text-white hover:bg-blue-700'
                         : 'bg-gray-200 text-gray-400 cursor-not-allowed',
                     )}
@@ -637,7 +884,7 @@ export function ChatView() {
                   {isStreaming && (
                     <button
                       onClick={stopStreaming}
-                      className="h-12 px-4 rounded-2xl bg-muted text-muted-foreground hover:bg-muted/80 transition"
+                      className="h-12 px-4 rounded-2xl bg-muted text-muted-foreground hover:bg-muted/80 transition shrink-0 mb-0.5"
                     >
                       停止
                     </button>
@@ -647,15 +894,15 @@ export function ChatView() {
 
               {/* Chat Quick Navigation */}
               {userMessages.length > 0 && (
-                <div className="absolute right-4 top-20 bottom-24 z-20 flex flex-col justify-center items-end pointer-events-none">
-                  <div className="pointer-events-auto flex flex-col gap-1 items-end p-2 rounded-xl hover:bg-muted/80 transition-all duration-300 group max-h-full overflow-y-auto scrollbar-hidden">
+                <div className="absolute right-4 top-20 bottom-24 z-20 flex flex-col justify-center items-end pointer-events-none group/nav">
+                  <div className="flex flex-col gap-1 items-end p-2 rounded-xl transition-all duration-300 max-h-full overflow-y-auto scrollbar-hidden group-hover/nav:bg-muted/80 group-hover/nav:pointer-events-auto">
                     {userMessages.map((m) => (
                       <div
                         key={m.id}
                         onClick={() => scrollToMessage(m.id)}
-                        className="cursor-pointer flex items-center gap-2 group/item h-4"
+                        className="pointer-events-auto cursor-pointer flex items-center gap-2 group/item h-4"
                       >
-                        <span className="text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap max-w-[200px] truncate text-right">
+                        <span className="text-xs text-muted-foreground opacity-0 group-hover/nav:opacity-40 group-hover/item:!opacity-100 transition-opacity duration-300 whitespace-nowrap max-w-[200px] truncate text-right">
                           {m.content}
                         </span>
                         <div

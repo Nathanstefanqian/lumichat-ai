@@ -46,6 +46,7 @@ const ASPECT_RATIOS = [
 export function ImageGenView() {
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -85,20 +86,45 @@ export function ImageGenView() {
     fetchTotalCost();
   }, []);
 
+  // Progress simulation
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isGenerating) {
+      setProgress(0);
+      interval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev < 90) return prev + Math.random() * 5;
+          if (prev < 99) return prev + Math.random() * 0.5;
+          return prev;
+        });
+      }, 500);
+    } else {
+      setProgress(0);
+    }
+    return () => clearInterval(interval);
+  }, [isGenerating]);
+
   // Advanced settings
-  const [model, setModel] = useState('image-01');
+  const [model, setModel] = useState('doubao-seedream-5-0-260128');
+  const [size, setSize] = useState('2K');
+  const [customWidth, setCustomWidth] = useState(2048);
+  const [customHeight, setCustomHeight] = useState(2048);
+  const [sizeMode, setSizeMode] = useState<'resolution' | 'custom'>('resolution');
   const [promptOptimizer, setPromptOptimizer] = useState(false);
-  const [aigcWatermark, setAigcWatermark] = useState(false);
-  const [seed, setSeed] = useState<string>(''); // Keep as string for input, parse to number
-  const [styleType, setStyleType] = useState('漫画');
-  const [styleWeight, setStyleWeight] = useState(0.8);
+  const [aigcWatermark, setAigcWatermark] = useState(true);
+  const [seed, setSeed] = useState<string>('');
   const [numImages, setNumImages] = useState(1);
+  const [guidanceScale, setGuidanceScale] = useState(2.5);
+  const [sequentialGeneration, setSequentialGeneration] = useState<'auto' | 'disabled'>('disabled');
+  const [isStream, setIsStream] = useState(false);
+  const [isWebSearch, setIsWebSearch] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<'jpeg' | 'png'>('jpeg');
 
   // Image to Image
   const [mode, setMode] = useState<'text-to-image' | 'image-to-image'>(
     'text-to-image',
   );
-  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -108,29 +134,43 @@ export function ImageGenView() {
       return;
     }
 
-    if (mode === 'image-to-image' && !referenceImage) {
-      toast.error('请上传参考图');
+    if (mode === 'image-to-image' && referenceImages.length === 0) {
+      toast.error('请上传至少一张参考图');
       return;
     }
 
     setIsGenerating(true);
     try {
-      const result = await generateImage(prompt, {
+      const options: any = {
         model,
-        aspect_ratio: aspectRatio,
-        prompt_optimizer: promptOptimizer,
-        aigc_watermark: aigcWatermark,
+        watermark: aigcWatermark,
         seed: seed ? parseInt(seed, 10) : undefined,
-        reference_image:
-          mode === 'image-to-image' ? referenceImage || undefined : undefined,
-        style:
-          model === 'image-01-live'
-            ? { style_type: styleType, style_weight: styleWeight }
-            : undefined,
-        n: numImages,
-      });
-      // api client returns the 'data' field from response structure
-      // which contains { imageUrl: string }
+        reference_images: mode === 'image-to-image' ? referenceImages : undefined,
+        size: sizeMode === 'resolution' ? size : `${customWidth}x${customHeight}`,
+        sequential_image_generation: sequentialGeneration,
+        stream: isStream,
+        optimize_prompt_options: promptOptimizer ? { mode: 'standard' } : undefined,
+      };
+
+      if (model.includes('5.0')) {
+        options.output_format = outputFormat;
+        if (isWebSearch) {
+          options.tools = [{ type: 'web_search' }];
+        }
+      }
+
+      if (model.includes('3.0')) {
+        options.guidance_scale = guidanceScale;
+      }
+
+      if (sequentialGeneration === 'auto') {
+        options.sequential_image_generation_options = {
+          max_images: numImages,
+        };
+      }
+
+      const result = await generateImage(prompt, options);
+      
       if (result && result.imageUrl) {
         setImageUrl(result.imageUrl);
         await fetchHistory();
@@ -149,11 +189,6 @@ export function ImageGenView() {
 
   const handleDownload = async (url: string, filename?: string) => {
     try {
-      // Direct download via window.open if fetch fails or for simpler approach
-      // But for filename control, we usually need blob.
-      // Given CORS issues with OSS, we'll try to use a link with target="_blank" and download attribute
-      // or just open in new tab if blob fetch fails.
-      
       const response = await fetch(url, { mode: 'cors' }).catch(() => null);
       if (response && response.ok) {
         const blob = await response.blob();
@@ -166,12 +201,10 @@ export function ImageGenView() {
         document.body.removeChild(link);
         window.URL.revokeObjectURL(blobUrl);
       } else {
-        // Fallback: Open in new tab
         const link = document.createElement('a');
         link.href = url;
         link.target = '_blank';
         link.rel = 'noopener noreferrer';
-        // Add download attribute (might not work cross-origin without CORS, but better than nothing)
         link.setAttribute('download', filename || '');
         document.body.appendChild(link);
         link.click();
@@ -180,7 +213,6 @@ export function ImageGenView() {
       }
     } catch (error) {
       console.error('Download failed', error);
-      // Last resort fallback
       window.open(url, '_blank');
       toast.error('下载失败，请在打开的页面中右键另存为');
     }
@@ -193,7 +225,6 @@ export function ImageGenView() {
       setHistory((prev) => prev.filter((img) => img.id !== id));
       await fetchTotalCost();
       if (imageUrl && history.find((img) => img.id === id)?.url === imageUrl) {
-        // If deleting current image, show latest remaining or null
         const remaining = history.filter((img) => img.id !== id);
         setImageUrl(remaining.length > 0 ? remaining[0].url : null);
       }
@@ -213,80 +244,36 @@ export function ImageGenView() {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('图片大小不能超过 5MB');
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error('图片大小不能超过 50MB');
       return;
     }
 
     setIsUploading(true);
     try {
-      // Use the upload API
       const response = await uploadReferenceImage(file);
-      // Construct full URL if response.url is relative
-      // Assuming api client base URL is set, but the returned URL is relative to server root
-      // We might need to prepend backend URL if it's not on same domain
-      // But for now let's assume relative path works or prepend window.location.origin/api or similar
-      // Actually, if we use relative URL with Minimax API, Minimax server can't access it unless it's a public URL.
-      // Since we are running locally or on a server, we need a public URL.
-      // If localhost, Minimax can't reach it.
-      // User context says "server update", so maybe it's deployed.
-      // But for local dev, Minimax can't access localhost.
-      // I'll display the uploaded image and pass the URL.
-      // If Minimax can't access it, it will fail.
-      // I'll assume the deployment environment allows public access or I'll warn about it.
-      // Wait, the user said "server backend update", implying deployment.
-      // For now, I'll use the relative URL but I need to make sure it's absolute for the API call if needed.
-      // Minimax API needs an accessible URL.
-      // If I return `/uploads/xxx.jpg`, I should prepend the server's base URL.
-      // I'll prepend `window.location.origin` if in browser, but the backend is separate.
-      // I'll rely on the backend returning a full URL or frontend constructing it.
-      // Let's assume the backend returns relative path, and frontend constructs full URL.
-      // However, frontend doesn't know backend's public URL easily unless configured.
-      // Let's just use the URL returned and hope Minimax can access it or I'll check.
-      // Actually, for local dev with Minimax, I might need ngrok or similar.
-      // But I will implement the logic.
-
-      // For display
-      // setReferenceImage(response.data.url);
-      // Wait, axios response wrapper might return data directly or response object.
-      // The `uploadReferenceImage` returns `api.post(...)`.
-      // `api.post` usually returns data directly in this project setup?
-      // In `generateImage`, it casts result to `{ imageUrl: string }`.
-      // So `uploadReferenceImage` returns `{ url: string }`.
-      
       const res = (response as unknown) as { url: string };
-      
-      // We need a full URL for Minimax API
-      // Let's construct it using the current window location if backend is on same domain,
-      // or if backend is on different domain, we need that domain.
-      // For now, I'll use a hack: if URL starts with /, prepend window.location.origin (if same host)
-      // or better, rely on backend to return full URL if possible.
-      // But my backend controller returns relative URL.
-      // I'll use `window.location.origin + res.url` for now if running on same domain.
-      // If separate, this might be wrong.
-      // But typically `api` axios instance has `baseURL`.
-      // I can't easily access `baseURL` from here.
-      // I'll try to use the relative URL and see if it works (unlikely for external API).
-      // I'll convert it to absolute URL based on document.baseURI or similar.
       
       let fullUrl = res.url;
       if (fullUrl.startsWith('/')) {
-         // Assuming the backend is served from the same origin or proxied
          fullUrl = window.location.origin + fullUrl;
-         // If development, backend might be on port 3000 and frontend on 5173.
-         // This is a common issue.
-         // I'll just set it and let the user know if it fails.
-         // Actually, I can check `import.meta.env.VITE_API_URL` if exists.
       }
       
-      setReferenceImage(fullUrl);
+      setReferenceImages(prev => [...prev, fullUrl].slice(0, 14));
       toast.success('参考图上传成功');
     } catch (error) {
       console.error(error);
       toast.error('上传失败');
     } finally {
       setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
+  };
+
+  const removeReferenceImage = (index: number) => {
+    setReferenceImages(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -321,36 +308,39 @@ export function ImageGenView() {
 
                 <TabsContent value="image-to-image" className="mt-0 space-y-4">
                   <div className="space-y-2">
-                    <Label>参考图 (Subject Reference)</Label>
-                    <div
-                      className="border-2 border-dashed border-input rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors h-32 relative overflow-hidden"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      {referenceImage ? (
-                        <>
-                          <img
-                            src={referenceImage}
-                            alt="Reference"
-                            className="absolute inset-0 w-full h-full object-cover opacity-50"
-                          />
-                          <div className="z-10 bg-background/80 p-2 rounded-full">
-                            <Upload className="w-5 h-5 text-primary" />
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-center space-y-1">
-                          <Upload className="w-8 h-8 mx-auto text-muted-foreground" />
-                          <p className="text-xs text-muted-foreground">
-                            点击上传图片 (需为公网可访问的图片 URL)
-                          </p>
+                    <div className="flex justify-between items-center">
+                      <Label>参考图 (Reference Images)</Label>
+                      <span className="text-[10px] opacity-50">{referenceImages.length}/14</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-4 gap-2 mb-2">
+                      {referenceImages.map((url, index) => (
+                        <div key={index} className="relative group aspect-square rounded-lg overflow-hidden border">
+                          <img src={url} alt={`Ref ${index}`} className="w-full h-full object-cover" />
+                          <button 
+                            onClick={() => removeReferenceImage(index)}
+                            className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </div>
-                      )}
-                      {isUploading && (
-                        <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-20">
-                          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                      ))}
+                      
+                      {referenceImages.length < 14 && (
+                        <div
+                          className="border-2 border-dashed border-input rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors aspect-square relative"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          <Upload className="w-4 h-4 text-muted-foreground" />
+                          {isUploading && (
+                            <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-20">
+                              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
+                    
                     <input
                       type="file"
                       ref={fileInputRef}
@@ -358,6 +348,7 @@ export function ImageGenView() {
                       accept="image/*"
                       onChange={handleFileChange}
                     />
+                    <p className="text-[10px] text-muted-foreground">支持多图融合，最多 14 张</p>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -394,64 +385,123 @@ export function ImageGenView() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>模型选择</Label>
-                    <Select value={model} onValueChange={setModel}>
+                    <Select value={model} onValueChange={(v) => {
+                      setModel(v);
+                      if (v.includes('5-0')) setSize('2K');
+                      else if (v.includes('4-5') || v.includes('4-0')) setSize('2K');
+                    }}>
                       <SelectTrigger>
                         <SelectValue placeholder="选择模型" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="image-01">Minimax Image-01 (标准)</SelectItem>
-                        <SelectItem value="image-01-live">Minimax Image-01 Live (画风)</SelectItem>
+                        <SelectItem value="doubao-seedream-5-0-260128">Doubao-Seedream 5.0 Lite</SelectItem>
+                        <SelectItem value="doubao-seedream-4-5-251128">Doubao-Seedream 4.5</SelectItem>
+                        <SelectItem value="doubao-seedream-4-0-250828">Doubao-Seedream 4.0</SelectItem>
+                        <SelectItem value="doubao-seedream-3-0-t2i-250415">Doubao-Seedream 3.0</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {model === 'image-01-live' && (
-                    <div className="space-y-4 p-4 rounded-xl bg-muted/50">
-                      <div className="space-y-2">
-                        <Label>画风选择</Label>
-                        <Select value={styleType} onValueChange={setStyleType}>
-                          <SelectTrigger className="bg-background">
-                            <SelectValue placeholder="选择画风" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="漫画">漫画</SelectItem>
-                            <SelectItem value="元气">元气</SelectItem>
-                            <SelectItem value="中世纪">中世纪</SelectItem>
-                            <SelectItem value="水彩">水彩</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <Label>画风权重</Label>
-                          <span className="text-xs font-mono text-primary">{styleWeight.toFixed(1)}</span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.1"
-                          value={styleWeight}
-                          onChange={(e) => setStyleWeight(parseFloat(e.target.value))}
-                          className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                  <div className="space-y-2">
+                    <Label>尺寸模式</Label>
+                    <Tabs value={sizeMode} onValueChange={(v) => setSizeMode(v as any)} className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="resolution">预设分辨率</TabsTrigger>
+                        <TabsTrigger value="custom">自定义像素</TabsTrigger>
+                      </TabsList>
+                    </Tabs>
+                  </div>
+
+                  {sizeMode === 'resolution' ? (
+                    <div className="space-y-2">
+                      <Label>分辨率</Label>
+                      <Select value={size} onValueChange={setSize}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="选择分辨率" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2K">2K</SelectItem>
+                          {model.includes('5-0') && <SelectItem value="3K">3K</SelectItem>}
+                          {model.includes('4-5') && <SelectItem value="4K">4K</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">宽度 (px)</Label>
+                        <Input 
+                          type="number" 
+                          value={customWidth} 
+                          onChange={(e) => setCustomWidth(parseInt(e.target.value))} 
+                          className="h-8"
                         />
                       </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px]">高度 (px)</Label>
+                        <Input 
+                          type="number" 
+                          value={customHeight} 
+                          onChange={(e) => setCustomHeight(parseInt(e.target.value))} 
+                          className="h-8"
+                        />
+                      </div>
+                      <p className="col-span-2 text-[10px] opacity-50">
+                        总像素需在 368.64w - {model.includes('5-0') ? '1040.45w' : '1677.72w'} 之间
+                      </p>
                     </div>
                   )}
 
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label>生成数量</Label>
-                      <span className="text-xs font-mono text-primary">{numImages} 张</span>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="sequential-gen">生成组图</Label>
+                      <p className="text-[10px] theme-subtle">基于参考图生成一系列关联图片</p>
                     </div>
-                    <input
-                      type="range"
-                      min="1"
-                      max="9"
-                      step="1"
-                      value={numImages}
-                      onChange={(e) => setNumImages(parseInt(e.target.value, 10))}
-                      className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                    <Switch
+                      id="sequential-gen"
+                      checked={sequentialGeneration === 'auto'}
+                      onCheckedChange={(checked) => setSequentialGeneration(checked ? 'auto' : 'disabled')}
+                    />
+                  </div>
+
+                  {model.includes('5.0') && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="web-search">联网搜索</Label>
+                          <p className="text-[10px] theme-subtle">搜索互联网内容提升时效性</p>
+                        </div>
+                        <Switch
+                          id="web-search"
+                          checked={isWebSearch}
+                          onCheckedChange={setIsWebSearch}
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>输出格式</Label>
+                        <Select value={outputFormat} onValueChange={(v: any) => setOutputFormat(v)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="jpeg">JPEG</SelectItem>
+                            <SelectItem value="png">PNG</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="stream-mode">流式输出</Label>
+                      <p className="text-[10px] theme-subtle">即时返回每张生成结果</p>
+                    </div>
+                    <Switch
+                      id="stream-mode"
+                      checked={isStream}
+                      onCheckedChange={setIsStream}
                     />
                   </div>
 
@@ -467,9 +517,7 @@ export function ImageGenView() {
                   <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                       <Label htmlFor="watermark">添加水印</Label>
-                      <p className="text-xs theme-subtle">
-                        开启后将在图片右下角添加 Minimax 标识
-                      </p>
+                      <p className="text-xs theme-subtle">在图片右下角添加标识</p>
                     </div>
                     <Switch
                       id="watermark"
@@ -488,6 +536,43 @@ export function ImageGenView() {
                       onChange={(e) => setSeed(e.target.value)}
                     />
                   </div>
+
+                  {sequentialGeneration === 'auto' && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label>组图最大生成数量</Label>
+                        <span className="text-xs font-mono text-primary">{numImages} 张</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="15"
+                        step="1"
+                        value={numImages}
+                        onChange={(e) => setNumImages(parseInt(e.target.value, 10))}
+                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                      <p className="text-[10px] theme-subtle">参考图 + 生成图总数不超过 15</p>
+                    </div>
+                  )}
+
+                  {model.includes('3.0') && (
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center">
+                        <Label>引导强度 (CFG Scale)</Label>
+                        <span className="text-xs font-mono text-primary">{guidanceScale.toFixed(1)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        step="0.5"
+                        value={guidanceScale}
+                        onChange={(e) => setGuidanceScale(parseFloat(e.target.value))}
+                        className="w-full h-1.5 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -515,7 +600,9 @@ export function ImageGenView() {
           <div className="lg:col-span-8">
             <div className="theme-surface rounded-3xl shadow-sm border h-[600px] flex items-center justify-center theme-muted relative overflow-hidden group">
               {isGenerating ? (
-                <ParticleLoader />
+                <div className="relative w-full h-full flex items-center justify-center bg-background/50 backdrop-blur-sm z-10">
+                  <ParticleLoader progress={progress} />
+                </div>
               ) : imageUrl ? (
                 <div className="relative w-full h-full bg-black/5 flex items-center justify-center p-4">
                   <img
@@ -565,44 +652,48 @@ export function ImageGenView() {
                     <span>{history.length} 张图片</span>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {history.map((img) => (
-                    <div
-                      key={img.id}
-                      className={cn(
-                        'relative group aspect-square rounded-xl overflow-hidden border cursor-pointer transition-all bg-muted',
-                        imageUrl === img.url
-                          ? 'ring-2 ring-primary ring-offset-2'
-                          : 'hover:border-primary',
-                      )}
-                      onClick={() => setImageUrl(img.url)}
-                    >
-                      <img
-                        src={img.url}
-                        alt={img.prompt}
-                        className="w-full h-full object-cover transition-transform group-hover:scale-105"
-                      />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDownload(img.url);
-                          }}
-                          className="p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-colors transform hover:scale-110"
-                          title="下载"
-                        >
-                          <Download className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={(e) => handleDelete(e, img.id)}
-                          className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full transition-colors transform hover:scale-110"
-                          title="删除"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                
+                {/* 滚动容器 */}
+                <div className="max-h-[500px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted-foreground/20 hover:scrollbar-thumb-muted-foreground/40 transition-colors">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 pb-4">
+                    {history.map((img) => (
+                      <div
+                        key={img.id}
+                        className={cn(
+                          'relative group aspect-square rounded-xl overflow-hidden border cursor-pointer transition-all bg-muted',
+                          imageUrl === img.url
+                            ? 'ring-2 ring-primary ring-offset-2'
+                            : 'hover:border-primary',
+                        )}
+                        onClick={() => setImageUrl(img.url)}
+                      >
+                        <img
+                          src={img.url}
+                          alt={img.prompt}
+                          className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownload(img.url);
+                            }}
+                            className="p-2 bg-white/20 hover:bg-white/40 text-white rounded-full transition-colors transform hover:scale-110"
+                            title="下载"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => handleDelete(e, img.id)}
+                            className="p-2 bg-red-500/80 hover:bg-red-500 text-white rounded-full transition-colors transform hover:scale-110"
+                            title="删除"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

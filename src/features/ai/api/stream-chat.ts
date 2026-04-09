@@ -7,6 +7,8 @@ export async function streamChat(
   onMeta: (conversationId: string) => void,
   onChunk: (chunk: string) => void,
   onThinking: (thinking: string) => void,
+  model?: string,
+  fileUrl?: string,
   signal?: AbortSignal,
 ) {
   const token = localStorage.getItem('auth-storage');
@@ -22,7 +24,15 @@ export async function streamChat(
       'Content-Type': 'application/json',
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
     },
-    body: JSON.stringify({ message, conversationId, enableThinking, enableSearch, temperature }),
+    body: JSON.stringify({
+      message,
+      conversationId,
+      enableThinking,
+      enableSearch,
+      temperature,
+      model,
+      fileUrl,
+    }),
     signal,
   });
 
@@ -40,35 +50,30 @@ export async function streamChat(
 
   while (true) {
     const { value, done } = await reader.read();
-    if (done) {
-      break;
-    }
+    if (done) break;
+
     buffer += decoder.decode(value, { stream: true });
     const parts = buffer.split('\n\n');
     buffer = parts.pop() || '';
+
     for (const part of parts) {
-      const lines = part.split('\n');
-      let eventType = 'message';
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          eventType = line.slice(7);
-          continue;
+      if (!part.startsWith('data: ')) continue;
+      const dataStr = part.slice(6);
+      if (dataStr === '[DONE]') return;
+
+      try {
+        const data = JSON.parse(dataStr);
+        if (data.type === 'meta') {
+          onMeta(data.conversationId);
+        } else if (data.type === 'chunk') {
+          onChunk(data.content);
+        } else if (data.type === 'thinking') {
+          onThinking(data.content);
+        } else if (data.type === 'error') {
+          throw new Error(data.message || '未知错误');
         }
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') {
-            return;
-          }
-          if (eventType === 'meta') {
-            onMeta(data);
-          } else if (eventType === 'error') {
-            throw new Error(data);
-          } else if (eventType === 'thinking') {
-            onThinking(data.replace(/\\n/g, '\n'));
-          } else {
-            onChunk(data.replace(/\\n/g, '\n'));
-          }
-        }
+      } catch (e) {
+        console.error('解析流数据失败:', e, dataStr);
       }
     }
   }

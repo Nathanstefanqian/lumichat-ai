@@ -53,10 +53,10 @@ export const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       }) as unknown as { url: string } | string;
       const imageUrl = typeof uploadRes === 'string' ? uploadRes : uploadRes.url;
 
-      // 2. 提交打卡记录
+      // 2. 提交打卡
       const result = await submitCheckIn({
         type: 'word',
-        imageUrl,
+        imageUrls: [imageUrl],
         content
       });
 

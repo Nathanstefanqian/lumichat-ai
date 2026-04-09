@@ -1,188 +1,123 @@
 import { useEffect, useRef } from 'react';
 
-interface Point {
-  x: number;
-  y: number;
-}
-
 interface ParticleLoaderProps {
-  variant?: 'music' | 'default';
+  progress?: number;
 }
 
-export function ParticleLoader({ variant = 'default' }: ParticleLoaderProps) {
+export const ParticleLoader = ({ progress }: ParticleLoaderProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     let animationFrameId: number;
-    let particles: Particle[] = [];
-    
-    class Particle {
-      x: number;
-      y: number;
-      targetX: number;
-      targetY: number;
-      vx: number;
-      vy: number;
-      color: string;
-      size: number;
+    const particles: any[] = [];
+    const particleCount = 100;
 
-      constructor(target: Point) {
-        this.x = Math.random() * canvas!.width;
-        this.y = Math.random() * canvas!.height;
-        this.targetX = target.x;
-        this.targetY = target.y;
-        this.vx = 0;
-        this.vy = 0;
-        const colors = ['#ec4899', '#8b5cf6', '#3b82f6', '#10b981'];
-        this.color = colors[Math.floor(Math.random() * colors.length)];
-        this.size = Math.random() * 3 + 1;
-      }
+    const resize = () => {
+      canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+      canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+      ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    };
 
-      update() {
-        const dx = this.targetX - this.x;
-        const dy = this.targetY - this.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        // Spring force
-        const force = dist * 0.01;
-        const angle = Math.atan2(dy, dx);
-        
-        this.vx += Math.cos(angle) * force;
-        this.vy += Math.sin(angle) * force;
-        
-        // Friction
-        this.vx *= 0.8;
-        this.vy *= 0.8;
-        
-        this.x += this.vx;
-        this.y += this.vy;
-        
-        // Add some jitter
-        this.x += (Math.random() - 0.5) * 0.5;
-        this.y += (Math.random() - 0.5) * 0.5;
-      }
+    window.addEventListener('resize', resize);
+    resize();
 
-      draw() {
-        if (!ctx) return;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = this.color;
-        ctx.fill();
-      }
+    // 初始化粒子
+    for (let i = 0; i < particleCount; i++) {
+      particles.push({
+        x: Math.random() * canvas.offsetWidth,
+        y: Math.random() * canvas.offsetHeight,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+        size: Math.random() * 2 + 1,
+        color: `hsl(${Math.random() * 360}, 70%, 70%)`
+      });
     }
 
-    const init = () => {
-      if (!canvas) return;
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      
-      const centerX = canvas.width / 2;
-      const centerY = canvas.height / 2;
-      const baseScale = Math.min(canvas.width, canvas.height) / 4;
-      
-      // Prevent drawing if size is too small
-      if (baseScale <= 0) return;
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
 
-      const newTargets: Point[] = [];
-      
-      if (variant === 'music') {
-          // Note Head (Ellipse at bottom left)
-          for (let i = 0; i < 40; i++) {
-            const angle = (i / 40) * Math.PI * 2;
-            newTargets.push({
-              x: centerX - baseScale * 0.5 + Math.cos(angle) * (baseScale * 0.3),
-              y: centerY + baseScale * 0.5 + Math.sin(angle) * (baseScale * 0.25)
-            });
+      // 绘制粒子和连线
+      particles.forEach((p, i) => {
+        p.x += p.vx;
+        p.y += p.vy;
+
+        if (p.x < 0 || p.x > canvas.offsetWidth) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.offsetHeight) p.vy *= -1;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
+
+        for (let j = i + 1; j < particles.length; j++) {
+          const p2 = particles[j];
+          const dx = p.x - p2.x;
+          const dy = p.y - p2.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 100) {
+            ctx.beginPath();
+            ctx.strokeStyle = p.color;
+            ctx.globalAlpha = 1 - dist / 100;
+            ctx.moveTo(p.x, p.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
           }
-          
-          // Stem (Vertical line)
-          for (let i = 0; i < 60; i++) {
-            newTargets.push({
-              x: centerX - baseScale * 0.5 + (baseScale * 0.3), // Right side of head
-              y: centerY + baseScale * 0.5 - (i * (baseScale * 1.5) / 60)
-            });
-          }
-          
-          // Flag (Curved line at top)
-          const stemTopX = centerX - baseScale * 0.5 + (baseScale * 0.3);
-          const stemTopY = centerY + baseScale * 0.5 - (baseScale * 1.5);
-          
-          for (let i = 0; i < 40; i++) {
-            const progress = i / 40;
-            newTargets.push({
-              x: stemTopX + progress * (baseScale * 0.8),
-              y: stemTopY + Math.sin(progress * Math.PI) * (baseScale * 0.4) + progress * (baseScale * 0.5)
-            });
-          }
-      } else {
-          // Default: A swirling circle
-          for (let i = 0; i < 100; i++) {
-            const angle = (i / 100) * Math.PI * 2;
-            newTargets.push({
-                x: centerX + Math.cos(angle) * baseScale,
-                y: centerY + Math.sin(angle) * baseScale
-            });
-          }
+        }
+      });
+
+      // 绘制百分比文字 - 核心修复：直接在 Canvas 上绘制
+      if (progress !== undefined) {
+        ctx.save();
+        const centerX = canvas.offsetWidth / 2;
+        const centerY = canvas.offsetHeight / 2;
+
+        // 绘制半透明圆景
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, 60, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fill();
+
+        // 绘制百分比
+        ctx.font = 'bold 48px monospace';
+        ctx.fillStyle = '#6366f1'; // primary color
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`${Math.floor(progress)}%`, centerX, centerY - 10);
+
+        // 绘制说明文字
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillText('欣妍构思中...', centerX, centerY + 30);
+        ctx.restore();
       }
 
-      // Create particles
-      particles = [];
-      newTargets.forEach(target => {
-        particles.push(new Particle(target));
-      });
-      
-      // Add some ambient particles
-      for(let i=0; i<30; i++) {
-         particles.push(new Particle({
-             x: Math.random() * canvas.width,
-             y: Math.random() * canvas.height
-         }));
-      }
+      animationFrameId = requestAnimationFrame(draw);
     };
 
-    const animate = () => {
-      if (!ctx || !canvas) return;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'; // Trail effect
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      particles.forEach(p => {
-        p.update();
-        p.draw();
-      });
-      
-      animationFrameId = requestAnimationFrame(animate);
-    };
-
-    init();
-    animate();
-
-    const resizeObserver = new ResizeObserver(() => {
-      init();
-    });
-    resizeObserver.observe(canvas);
+    draw();
 
     return () => {
-      resizeObserver.disconnect();
+      window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, [variant]);
+  }, [progress]);
 
   return (
-    <div className="absolute inset-0 bg-background/90 z-10 flex flex-col items-center justify-center pointer-events-none">
-      <canvas 
-        ref={canvasRef} 
-        className="w-full h-full absolute inset-0"
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      className="w-full h-full"
+      style={{ background: 'transparent' }}
+    />
   );
 }
 
 export function MusicParticleLoader() {
-  return <ParticleLoader variant="music" />;
+  return <ParticleLoader />;
 }

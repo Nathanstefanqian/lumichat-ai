@@ -12,9 +12,9 @@ const getAPlayer = (element: any) => (element as any)?.aplayer;
 export function MusicPlayer() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(true);
-  // 默认网易云热歌榜
-  const DEFAULT_PLAYLIST_ID = '3778678';
-  const [playlistId, setPlaylistId] = useState(() => localStorage.getItem('music-playlist-id') || DEFAULT_PLAYLIST_ID);
+  // 强制设置专属歌单 ID
+  const DEFAULT_PLAYLIST_ID = '17838971030';
+  const [playlistId, setPlaylistId] = useState(DEFAULT_PLAYLIST_ID);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [tempId, setTempId] = useState('');
   const [isLoading, setIsLoading] = useState(false);

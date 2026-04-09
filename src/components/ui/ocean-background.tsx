@@ -1,197 +1,162 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 
-export function OceanBackground() {
+export const OceanBackground: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // 性能优化：检测是否为移动端
+  const isMobile = useMemo(() => {
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) return;
 
-    let width = window.innerWidth;
-    let height = window.innerHeight;
-    
-    const setSize = () => {
+    let animationFrameId: number;
+    let width: number;
+    let height: number;
+
+    const FISH_COUNT = isMobile ? 6 : 15;
+    const BUBBLE_COUNT = isMobile ? 12 : 30;
+
+    const resize = () => {
       width = window.innerWidth;
       height = window.innerHeight;
       canvas.width = width;
       canvas.height = height;
     };
-    
-    setSize();
-    window.addEventListener('resize', setSize);
 
-    // Fish configuration
-    const fishCount = 15;
-    const fishes: Fish[] = [];
-    const bubbles: Bubble[] = [];
+    window.addEventListener('resize', resize);
+    resize();
 
-    class Fish {
+    // 使用接口定义对象结构，避免类初始化问题
+    interface IFish {
       x: number;
       y: number;
       size: number;
       speed: number;
       color: string;
-      direction: number; // 1 for right, -1 for left
-      angle: number;
-      tailAngle: number;
-      tailSpeed: number;
-
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.size = Math.random() * 10 + 5;
-        this.speed = Math.random() * 1 + 0.5;
-        this.color = `hsla(${Math.random() * 60 + 180}, 70%, 70%, 0.6)`; // Blue-Cyan range
-        this.direction = Math.random() > 0.5 ? 1 : -1;
-        this.angle = 0;
-        this.tailAngle = 0;
-        this.tailSpeed = 0.1 + Math.random() * 0.1;
-      }
-
-      update() {
-        this.x += this.speed * this.direction;
-        this.tailAngle += this.tailSpeed;
-
-        // Wrap around screen
-        if (this.direction === 1 && this.x > width + 50) this.x = -50;
-        if (this.direction === -1 && this.x < -50) this.x = width + 50;
-
-        // Gentle sine wave movement
-        this.y += Math.sin(this.x * 0.01) * 0.5;
-      }
-
-      draw(ctx: CanvasRenderingContext2D) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.scale(this.direction, 1); // Flip if moving left
-
-        // Body
-        ctx.fillStyle = this.color;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, this.size * 1.5, this.size, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Tail
-        ctx.beginPath();
-        ctx.moveTo(-this.size * 1.2, 0);
-        const tailWiggle = Math.sin(this.tailAngle) * 5;
-        ctx.lineTo(-this.size * 2.5, -this.size + tailWiggle);
-        ctx.lineTo(-this.size * 2.5, this.size + tailWiggle);
-        ctx.fill();
-
-        // Eye
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(this.size * 0.8, -this.size * 0.3, this.size * 0.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = 'black';
-        ctx.beginPath();
-        ctx.arc(this.size * 0.9, -this.size * 0.3, this.size * 0.1, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.restore();
-      }
+      oscillation: number;
     }
 
-    class Bubble {
+    interface IBubble {
       x: number;
       y: number;
       size: number;
       speed: number;
       opacity: number;
+    }
 
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = height + Math.random() * 100;
-        this.size = Math.random() * 5 + 2;
-        this.speed = Math.random() * 2 + 1;
-        this.opacity = Math.random() * 0.5 + 0.1;
+    const createFish = (): IFish => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * (isMobile ? 15 : 20) + 10,
+      speed: Math.random() * 1.5 + 0.5,
+      color: `rgba(147, 197, 253, ${Math.random() * 0.4 + 0.2})`, // 调亮鱼的颜色
+      oscillation: Math.random() * Math.PI * 2,
+    });
+
+    const createBubble = (): IBubble => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * (isMobile ? 3 : 5) + 1,
+      speed: Math.random() * 1 + 0.5,
+      opacity: Math.random() * 0.3 + 0.1,
+    });
+
+    const fishes = Array.from({ length: FISH_COUNT }, createFish);
+    const bubbles = Array.from({ length: BUBBLE_COUNT }, createBubble);
+
+    let cachedGradient: CanvasGradient | null = null;
+    let lastWidth = 0;
+    let lastHeight = 0;
+
+    const render = () => {
+      if (!cachedGradient || width !== lastWidth || height !== lastHeight) {
+        cachedGradient = context.createLinearGradient(0, 0, 0, height);
+        cachedGradient.addColorStop(0, '#0f172a'); // 顶部：深蓝色
+        cachedGradient.addColorStop(1, '#1e3a8a'); // 底部：明亮的海洋蓝
+        lastWidth = width;
+        lastHeight = height;
       }
 
-      update() {
-        this.y -= this.speed;
-        if (this.y < -20) {
-          this.y = height + Math.random() * 100;
-          this.x = Math.random() * width;
+      context.fillStyle = cachedGradient;
+      context.fillRect(0, 0, width, height);
+
+      const rayCount = isMobile ? 3 : 5;
+      for (let i = 0; i < rayCount; i++) {
+        const rayX = (width / rayCount) * i + (Math.sin(Date.now() / 2000 + i) * 50);
+        const rayWidth = isMobile ? 120 : 250;
+        
+        const rayGradient = context.createLinearGradient(rayX, 0, rayX + rayWidth, 0);
+        rayGradient.addColorStop(0, 'transparent');
+        rayGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.06)'); // 提高光线亮度
+        rayGradient.addColorStop(1, 'transparent');
+        
+        context.fillStyle = rayGradient;
+        context.beginPath();
+        context.moveTo(rayX, 0);
+        context.lineTo(rayX + rayWidth, 0);
+        context.lineTo(rayX + rayWidth - 100, height);
+        context.lineTo(rayX - 100, height);
+        context.fill();
+      }
+
+      bubbles.forEach(b => {
+        b.y -= b.speed;
+        if (b.y < -20) {
+          b.y = height + 20;
+          b.x = Math.random() * width;
         }
-      }
-
-      draw(ctx: CanvasRenderingContext2D) {
-        ctx.fillStyle = `rgba(255, 255, 255, ${this.opacity})`;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-
-    // Initialize fishes
-    for (let i = 0; i < fishCount; i++) {
-      fishes.push(new Fish());
-    }
-
-    // Initialize bubbles
-    for (let i = 0; i < 30; i++) {
-      bubbles.push(new Bubble());
-    }
-
-    let animationFrameId: number;
-
-    const animate = () => {
-      if (!ctx) return;
-      
-      // Clear with ocean gradient
-      const gradient = ctx.createLinearGradient(0, 0, 0, height);
-      gradient.addColorStop(0, '#0f172a'); // Deep dark blue at top
-      gradient.addColorStop(1, '#1e3a8a'); // Blue at bottom
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
-
-      // Draw light rays
-      ctx.save();
-      ctx.globalCompositeOperation = 'overlay';
-      const rayGradient = ctx.createLinearGradient(width / 2, 0, width / 2, height);
-      rayGradient.addColorStop(0, 'rgba(255, 255, 255, 0.1)');
-      rayGradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = rayGradient;
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(width, 0);
-      ctx.lineTo(width / 2 + 200, height);
-      ctx.lineTo(width / 2 - 200, height);
-      ctx.fill();
-      ctx.restore();
-
-      // Update and draw bubbles
-      bubbles.forEach(bubble => {
-        bubble.update();
-        bubble.draw(ctx);
+        context.beginPath();
+        context.fillStyle = `rgba(255, 255, 255, ${b.opacity})`;
+        context.arc(b.x, b.y, b.size, 0, Math.PI * 2);
+        context.fill();
       });
 
-      // Update and draw fishes
-      fishes.forEach(fish => {
-        fish.update();
-        fish.draw(ctx);
+      fishes.forEach(f => {
+        f.x += f.speed;
+        f.oscillation += 0.05;
+        f.y += Math.sin(f.oscillation) * 0.5;
+
+        if (f.x > width + f.size * 2) {
+          f.x = -f.size * 2;
+          f.y = Math.random() * height;
+        }
+
+        context.fillStyle = f.color;
+        context.beginPath();
+        context.ellipse(f.x, f.y, f.size, f.size / 2.5, 0, 0, Math.PI * 2);
+        context.fill();
+
+        context.beginPath();
+        context.moveTo(f.x - f.size * 0.8, f.y);
+        context.lineTo(f.x - f.size * 1.5, f.y - f.size / 2);
+        context.lineTo(f.x - f.size * 1.5, f.y + f.size / 2);
+        context.fill();
       });
 
-      animationFrameId = requestAnimationFrame(animate);
+      animationFrameId = requestAnimationFrame(render);
     };
 
-    animate();
+    render();
 
     return () => {
-      window.removeEventListener('resize', setSize);
+      window.removeEventListener('resize', resize);
       cancelAnimationFrame(animationFrameId);
     };
-  }, []);
+  }, [isMobile]);
 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 w-full h-full z-0"
-      style={{ pointerEvents: 'none' }}
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ background: '#0f172a' }}
     />
   );
-}
+};

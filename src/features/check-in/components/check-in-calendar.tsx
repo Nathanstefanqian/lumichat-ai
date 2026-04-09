@@ -6,10 +6,14 @@ import dayjs from 'dayjs';
 import type { CheckInRecord } from '../types';
 
 interface CheckInCalendarProps {
-  history: CheckInRecord[];
+  history: {
+    items: CheckInRecord[];
+    total: number;
+  };
+  onDateClick?: (date: string) => void;
 }
 
-export const CheckInCalendar: React.FC<CheckInCalendarProps> = ({ history }) => {
+export const CheckInCalendar: React.FC<CheckInCalendarProps> = ({ history, onDateClick }) => {
   const [currentMonth, setCurrentMonth] = React.useState(dayjs());
 
   const daysInMonth = currentMonth.daysInMonth();
@@ -18,7 +22,7 @@ export const CheckInCalendar: React.FC<CheckInCalendarProps> = ({ history }) => 
   const blanks = Array.from({ length: firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1 }, (_, i) => i);
 
   const checkInDates = new Set(
-    history.map(record => dayjs(record.createdAt).format('YYYY-MM-DD'))
+    history.items.map(record => dayjs(record.createdAt).format('YYYY-MM-DD'))
   );
 
   const prevMonth = () => setCurrentMonth(currentMonth.subtract(1, 'month'));
@@ -59,19 +63,22 @@ export const CheckInCalendar: React.FC<CheckInCalendarProps> = ({ history }) => 
             const isToday = dayjs().format('YYYY-MM-DD') === dateStr;
 
             return (
-              <div 
+              <button 
                 key={day} 
+                onClick={() => isCheckedIn && onDateClick?.(dateStr)}
+                disabled={!isCheckedIn && !isToday}
                 className={cn(
                   "aspect-square flex flex-col items-center justify-center rounded-lg text-sm relative transition-all",
-                  isCheckedIn ? "bg-green-500/20 text-green-600 font-bold" : "hover:bg-muted/50",
-                  isToday && !isCheckedIn && "border border-indigo-500/50 text-indigo-600"
+                  isCheckedIn ? "bg-green-500/20 text-green-600 font-bold hover:bg-green-500/30 cursor-pointer" : "hover:bg-muted/50 cursor-default",
+                  isToday && !isCheckedIn && "border border-indigo-500/50 text-indigo-600",
+                  !isCheckedIn && !isToday && "opacity-50 grayscale cursor-not-allowed"
                 )}
               >
                 {day}
                 {isCheckedIn && (
                   <div className="absolute bottom-1 w-1 h-1 bg-green-500 rounded-full" />
                 )}
-              </div>
+              </button>
             );
           })}
         </div>

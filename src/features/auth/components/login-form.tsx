@@ -5,13 +5,13 @@ import { useLogin } from '../api/login';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, MessageCircle } from 'lucide-react';
+import { Loader2, MessageCircle, UserCircle } from 'lucide-react';
 
 const loginSchema = z.object({
   username: z.string().min(1, '请输入用户名'),
   password: z.string(),
 }).superRefine((data, ctx) => {
-  if (data.username === 'codegod') {
+  if (data.username === 'codegod' || data.username === 'momo') {
     return;
   }
   
@@ -32,6 +32,7 @@ export function LoginForm() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -41,12 +42,18 @@ export function LoginForm() {
     login(data);
   };
 
+  const loginAsTestUser = () => {
+    setValue('username', 'momo');
+    setValue('password', 'Password123!');
+    login({ username: 'momo', password: 'Password123!' });
+  };
+
   return (
     <div className="grid gap-6">
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <div className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="username" className="text-gray-600 pl-2">用户名</Label>
+            <Label htmlFor="username" className="text-foreground/70 pl-2">用户名</Label>
             <Input
               id="username"
               placeholder="请输入用户名"
@@ -55,63 +62,78 @@ export function LoginForm() {
               autoComplete="username"
               autoCorrect="off"
               disabled={isPending}
-              className="rounded-full border-gray-200 bg-gray-50/50 focus:border-pink-300 focus:ring-4 focus:ring-pink-100 transition-all duration-300 h-12 px-6"
+              className="rounded-full border-primary/20 bg-background/50 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300 h-12 px-6"
               {...register('username')}
             />
             {errors.username && (
-              <p className="text-sm text-red-500 pl-2">{errors.username.message}</p>
+              <p className="text-sm text-rose-500 pl-2">{errors.username.message}</p>
             )}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password" className="text-gray-600 pl-2">密码</Label>
+            <Label htmlFor="password" className="text-foreground/70 pl-2">密码</Label>
             <Input
               id="password"
               type="password"
               placeholder="******"
               autoComplete="current-password"
               disabled={isPending}
-              className="rounded-full border-gray-200 bg-gray-50/50 focus:border-pink-300 focus:ring-4 focus:ring-pink-100 transition-all duration-300 h-12 px-6"
+              className="rounded-full border-primary/20 bg-background/50 focus:border-primary focus:ring-4 focus:ring-primary/10 transition-all duration-300 h-12 px-6"
               {...register('password')}
             />
             {errors.password && (
-              <p className="text-sm text-red-500 pl-2">{errors.password.message}</p>
+              <p className="text-sm text-rose-500 pl-2">{errors.password.message}</p>
             )}
           </div>
           
           {error && (
-            <div className="text-sm text-red-500 text-center bg-red-50 p-2 rounded-lg">
+            <div className="text-sm text-rose-500 text-center bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">
               {(error as Error).message}
             </div>
           )}
 
           <Button 
             disabled={isPending} 
-            className="w-full rounded-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 shadow-lg shadow-pink-200/50 text-white font-medium h-12 transition-all duration-300 transform hover:-translate-y-0.5 mt-2"
+            className="w-full rounded-full bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-500/20 text-white font-bold h-12 transition-all duration-300 transform hover:-translate-y-0.5 mt-2 border-none"
           >
             {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            登录
+            立即登录
           </Button>
         </div>
       </form>
 
-      <div className="relative my-2">
-        <div className="absolute inset-0 flex items-center">
-          <span className="w-full border-t border-gray-200" />
+      <div className="relative my-2 flex flex-col gap-3">
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t border-border/50" />
+          </div>
+          <div className="relative flex justify-center text-[10px] uppercase tracking-widest font-bold">
+            <span className="bg-card/90 backdrop-blur-md px-3 text-muted-foreground">或者使用</span>
+          </div>
         </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-white px-2 text-gray-500">或者使用</span>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={loginAsTestUser}
+            disabled={isPending}
+            className="rounded-full border-indigo-500/30 text-indigo-400 bg-indigo-500/5 hover:bg-indigo-500/10 hover:text-indigo-300 h-12 transition-all duration-300 border-dashed"
+          >
+            <UserCircle className="mr-2 h-4 w-4" />
+            测试账号 momo
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            disabled={true}
+            className="rounded-full border-border/50 text-muted-foreground bg-muted/30 h-12 cursor-not-allowed opacity-50"
+          >
+            <MessageCircle className="mr-2 h-4 w-4" />
+            微信登录
+          </Button>
         </div>
       </div>
-
-      <Button
-        type="button"
-        variant="outline"
-        disabled={true}
-        className="w-full rounded-full border-gray-200 text-gray-400 bg-gray-50 h-12 cursor-not-allowed"
-      >
-        <MessageCircle className="mr-2 h-4 w-4 text-gray-400" />
-        微信扫码登录 (暂未开放)
-      </Button>
     </div>
   );
 }
